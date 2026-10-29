@@ -1,0 +1,12 @@
+# Personal data: database, secrets, backups, logs, generated application folders
+data/
+Applications/
+.env
+
+# Build output and dependencies
+node_modules/
+dist/
+*.log
+
+# Personal working notes, kept on this computer only
+docs/ETAT.md

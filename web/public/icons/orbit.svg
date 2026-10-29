@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .bg { fill: #eef3ff } .b1 { stop-color: #2563eb } .b2 { stop-color: #1e3fae } .h { stop-color: #93c5fd }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0a1324 } .b1 { stop-color: #3b7bff } .b2 { stop-color: #0b3fe0 } .h { stop-color: #ffffff }
+    }
+  </style>
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="b1"/><stop offset="1" class="b2"/></linearGradient>
+    <linearGradient id="hi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" class="h" stop-opacity="0.95"/><stop offset="0.32" class="h" stop-opacity="0"/>
+      <stop offset="0.66" class="h" stop-opacity="0"/><stop offset="1" class="h" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <rect class="bg" width="64" height="64" rx="14"/>
+  <g transform="translate(32 32) scale(0.88) translate(-32 -32) rotate(-30 32 32)">
+    <path fill-rule="evenodd" fill="url(#base)" d="M5 32a27 21 0 1 0 54 0a27 21 0 1 0-54 0ZM13.6 31.4a21 15.5 0 1 0 42 0a21 15.5 0 1 0-42 0Z"/>
+    <path fill-rule="evenodd" fill="url(#hi)" d="M5 32a27 21 0 1 0 54 0a27 21 0 1 0-54 0ZM13.6 31.4a21 15.5 0 1 0 42 0a21 15.5 0 1 0-42 0Z"/>
+  </g>
+</svg>
