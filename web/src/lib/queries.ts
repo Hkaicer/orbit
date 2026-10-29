@@ -18,10 +18,11 @@ export const useHistory = (f: { applicationId?: string; offerId?: string; limit?
 export const useBackups = () => useQuery({ queryKey: ["backups"], queryFn: api.backups });
 export const useAiStatus = () => useQuery({ queryKey: ["ai-status"], queryFn: () => api.aiStatus(), staleTime: 5 * 60_000, refetchOnWindowFocus: false });
 export const useConnectors = (enabled: boolean) => useQuery({ queryKey: ["connectors"], queryFn: () => api.connectors(), enabled, staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: false });
+export const useAiProviders = () => useQuery({ queryKey: ["ai-providers"], queryFn: api.aiProviders, staleTime: 30_000 });
 export const useConversation = () => useQuery({ queryKey: ["conversation"], queryFn: api.conversation });
 
 /** After any change: everything is local and small, so all lists are simply read again. */
-export const refreshAll = (qc: QueryClient) => qc.invalidateQueries({ predicate: (q) => !["ai-status", "conversation", "connectors"].includes(String(q.queryKey[0])) });
+export const refreshAll = (qc: QueryClient) => qc.invalidateQueries({ predicate: (q) => !["ai-status", "conversation", "connectors", "ai-providers"].includes(String(q.queryKey[0])) });
 
 export function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;

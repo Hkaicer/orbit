@@ -12,6 +12,13 @@
     <link rel="apple-touch-icon" href="/icons/orbit-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>ORBIT</title>
+    <script>
+      // The saved theme, before the first paint.
+      try {
+        const t = localStorage.getItem("orbit.theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

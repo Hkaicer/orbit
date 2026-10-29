@@ -1,4 +1,4 @@
-import { MODE_LABELS, MODEL_LABELS, type AiStatus, type AssistantTask, type ChatMessage, type ModelChoice, type Proposal, type RequestMode } from "@shared/types";
+import { MODE_LABELS, MODEL_LABELS, REASONING_LABELS, type AiStatus, type AssistantTask, type ChatMessage, type ModelChoice, type Proposal, type RequestMode } from "@shared/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, Check, ChevronDown, CircleStop, Download, FolderOpen, ListChecks, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -43,10 +43,16 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 const MODE_HINTS: Record<RequestMode, string> = {
-  auto: "Claude choisit : il fait tout de suite ce que vous demandez clairement, et vous propose le reste avant de le faire.",
-  A: "Claude prépare les changements, rien n'est fait avant votre validation.",
+  auto: "L'IA choisit : elle fait tout de suite ce que vous demandez clairement, et vous propose le reste avant de le faire.",
+  A: "L'IA prépare les changements, rien n'est fait avant votre validation.",
   B: "Les étapes locales sont faites seules. Tout envoi attend votre accord.",
-  C: "Claude enchaîne le plus d'étapes possible. Tout envoi attend toujours votre accord.",
+  C: "L'IA enchaîne le plus d'étapes possible. Tout envoi attend toujours votre accord.",
+};
+
+const REASONING_HINTS: Record<ModelChoice, string> = {
+  haiku: "réflexion courte, questions simples",
+  sonnet: "réflexion moyenne, travail courant",
+  opus: "réflexion poussée, CV et lettres",
 };
 
 const MODEL_HINTS: Record<ModelChoice, string> = {
@@ -56,7 +62,7 @@ const MODEL_HINTS: Record<ModelChoice, string> = {
 };
 
 const TASK_LABELS: Record<AssistantTask, string> = {
-  discovery: "Découverte par Claude : lis mes CV et mes lettres et crée mon profil.",
+  discovery: "Découverte : lis mes CV et mes lettres et crée mon profil.",
 };
 
 const SUGGESTIONS = [
@@ -85,12 +91,16 @@ export function AssistantPanel() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const mode: RequestMode = ui.mode ?? settings.data?.defaultMode ?? "auto";
   const model: ModelChoice = ui.model ?? settings.data?.model ?? "sonnet";
+  // Claude: Haiku, Sonnet, Opus. An OpenAI model: one model that reasons more or less.
+  const openai = status.data?.family === "openai";
+  const labels = openai ? REASONING_LABELS : MODEL_LABELS;
+  const hints = openai ? REASONING_HINTS : MODEL_HINTS;
   const ready = status.data?.state === "ready";
   const busy = Boolean(streaming) || Boolean(convo.data?.busy);
   const proposals = useMemo(() => new Map((convo.data?.proposals ?? []).map((p) => [p.id, p])), [convo.data]);
   const messages = convo.data?.messages ?? [];
 
-  // A button elsewhere ("Analyser avec Claude"...) prepares a request: it is shown here, never sent on its own.
+  // A button elsewhere ("Analyser avec l'IA"...) prepares a request: it is shown here, never sent on its own.
   useEffect(() => {
     if (ui.draft) {
       setInput(ui.draft);
@@ -105,7 +115,7 @@ export function AssistantPanel() {
     }
   }, [ui.draft]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A task started elsewhere (the discovery of the profile) is sent once Claude is ready.
+  // A task started elsewhere (the discovery of the profile) is sent once the assistant is ready.
   useEffect(() => {
     if (!ui.task || !ready || busy) return;
     const task = ui.task;
@@ -170,7 +180,7 @@ export function AssistantPanel() {
           value={mode}
           onChange={(m) => ui.set({ mode: m })}
           options={[
-            { value: "auto", label: "Auto", ariaLabel: "Auto · Claude choisit le mode" },
+            { value: "auto", label: "Auto", ariaLabel: "Auto · l'IA choisit le mode" },
             ...(["A", "B", "C"] as const).map((m) => ({ value: m, label: `Mode ${m}`, ariaLabel: MODE_LABELS[m] })),
           ]}
         />
@@ -206,7 +216,7 @@ export function AssistantPanel() {
             ref={inputRef}
             value={input}
             rows={1}
-            placeholder={ready ? "Votre demande..." : "Claude n'est pas disponible"}
+            placeholder={ready ? "Votre demande..." : "L'assistant IA n'est pas disponible"}
             aria-label="Votre demande"
             disabled={!ready}
             onChange={(e) => setInput(e.target.value)}
@@ -226,16 +236,16 @@ export function AssistantPanel() {
             <Menu
               label="Modèle de cette demande"
               items={[
-                { heading: "Modèle de cette demande" },
+                { heading: openai ? `${status.data?.model ?? "Modèle"} : réflexion` : "Modèle de cette demande" },
                 ...(["haiku", "sonnet", "opus"] as ModelChoice[]).map((m) => ({
-                  label: `${MODEL_LABELS[m]} · ${MODEL_HINTS[m]}`,
+                  label: `${labels[m]} · ${hints[m]}`,
                   icon: m === model ? <Check /> : <span style={{ width: 15 }} />,
                   onSelect: () => ui.set({ model: m }),
                 })),
               ]}
               trigger={(p) => (
                 <button type="button" {...p} className="composer-chip" disabled={busy} title="Changer de modèle pour cette demande">
-                  {MODEL_LABELS[model]}
+                  {labels[model]}
                   <ChevronDown />
                 </button>
               )}
@@ -253,7 +263,7 @@ export function AssistantPanel() {
             )}
           </div>
         </div>
-        <div className="composer-hint">Entrée pour envoyer, Maj+Entrée pour aller à la ligne. Claude ne reçoit que ce qu'il consulte, jamais les documents privés.</div>
+        <div className="composer-hint">Entrée pour envoyer, Maj+Entrée pour aller à la ligne. L'IA ne reçoit que ce qu'elle consulte, jamais les documents privés.</div>
       </div>
     </aside>
   );
@@ -274,9 +284,9 @@ function NotReady({ status }: { status: AiStatus }) {
   const [checking, setChecking] = useState(false);
   return (
     <div className="as-notready">
-      <div className="as-notready-title">Claude n'est pas disponible</div>
+      <div className="as-notready-title">L'assistant IA n'est pas disponible</div>
       <p>{status.message}</p>
-      <p className="text-3 small">Les offres, candidatures, documents et Gmail restent utilisables sans Claude.</p>
+      <p className="text-3 small">Les offres, candidatures, documents et Gmail restent utilisables sans l'IA.</p>
       <div className="row">
         <Button
           size="sm"
@@ -378,7 +388,7 @@ function OpenFolder({ path }: { path: string }) {
   );
 }
 
-/** Mode A: what Claude prepared, applied only on the user's click. */
+/** Mode A: what the assistant prepared, applied only on the user's click. */
 function ProposalCard({ proposal: p }: { proposal: Proposal }) {
   const qc = useQueryClient();
   const { busy, run } = useAction();

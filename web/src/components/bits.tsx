@@ -135,7 +135,7 @@ export function ScoreChip({ score, by }: { score: number | null | undefined; by?
   if (score === null || score === undefined) return <span className="score-chip is-none">–</span>;
   const tone = score >= 75 ? "high" : score >= 55 ? "mid" : score >= 40 ? "low" : "min";
   return (
-    <span className={`score-chip is-${tone}`} title={by === "local" ? "Estimation locale par mots-clés, sans Claude" : "Adéquation du profil, sur 100"}>
+    <span className={`score-chip is-${tone}`} title={by === "local" ? "Estimation locale par mots-clés, sans l'IA" : "Adéquation du profil, sur 100"}>
       {score}
       {by === "local" && <span className="score-est">≈</span>}
     </span>
@@ -181,7 +181,7 @@ export function Section({ title, hint, actions, children, id }: { title: ReactNo
   );
 }
 
-/** Something found in an email or proposed by Claude: nothing changes until the user confirms it. */
+/** Something found in an email or proposed by the assistant: nothing changes until the user confirms it. */
 export function ConfirmationCard({ item, showApplication = true }: { item: Confirmation; showApplication?: boolean }) {
   const { evidence: e, application: a } = item;
   const ui = useUi();
@@ -195,7 +195,7 @@ export function ConfirmationCard({ item, showApplication = true }: { item: Confi
       title: `Passer à « ${STATUS_LABELS[target]} » ?`,
       body: fromMail
         ? "Le courriel sera gardé comme preuve dans le suivi de cette candidature."
-        : "Claude l'a seulement proposé : en confirmant, vous attestez que c'est vrai. Ce sera noté comme déclaré par vous.",
+        : "L'IA l'a seulement proposé : en confirmant, vous attestez que c'est vrai. Ce sera noté comme déclaré par vous.",
       confirmLabel: "Confirmer",
     });
     if (ok) await run("confirm", () => api.confirmEvidence(e.id, status), "Statut mis à jour.");
@@ -217,7 +217,7 @@ export function ConfirmationCard({ item, showApplication = true }: { item: Confi
             </span>
           </div>
         ) : (
-          <div className="confirm-source text-2">Proposé par Claude</div>
+          <div className="confirm-source text-2">Proposé par l'IA</div>
         )}
         {e.excerpt && <p className="confirm-excerpt">{e.excerpt}</p>}
         <div className="confirm-suggest">

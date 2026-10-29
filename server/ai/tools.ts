@@ -115,15 +115,19 @@ const zAnalysis = z.object({
 const zCvContent = z.object({
   headline: z.string().min(3).max(200),
   profile: z.string().min(20).max(1200),
-  experiences: z
-    .array(z.object({ role: z.string().min(2).max(200), org: z.string().max(200), date: z.string().max(80), bullets: z.array(z.string().min(5).max(500)).max(6) }))
-    .max(6),
+  experiences: z.array(z.object({ role: z.string().min(2).max(200), org: z.string().max(200), date: z.string().max(80), bullets: z.array(z.string().min(5).max(500)).max(6) })).max(6),
   education: z.array(z.object({ degree: z.string().min(2).max(200), school: z.string().max(200), date: z.string().max(80), details: z.string().max(400).optional() })).max(5),
-  projects: z.array(z.object({ title: z.string().min(2).max(200), text: z.string().max(500) })).max(4).optional(),
+  projects: z
+    .array(z.object({ title: z.string().min(2).max(200), text: z.string().max(500) }))
+    .max(4)
+    .optional(),
   skills: z.array(z.object({ label: z.string().min(2).max(80), value: z.string().max(500) })).max(8),
   certifications: z.array(z.string().max(150)).max(10).optional(),
   languages: z.string().max(300).optional(),
-  links: z.array(z.object({ label: z.string().max(80), url: z.url().max(300) })).max(4).optional(),
+  links: z
+    .array(z.object({ label: z.string().max(80), url: z.url().max(300) }))
+    .max(4)
+    .optional(),
 });
 
 export const TOOLS = [
@@ -547,11 +551,13 @@ const CHOOSE_MODE = {
 
 export function toolDefinitions(rc?: RunContext) {
   const defs = rc?.auto ? [CHOOSE_MODE, ...(TOOLS as unknown as ToolDef[])] : (TOOLS as unknown as ToolDef[]);
-  return defs.filter((t) => !rc?.only || rc.only.includes(t.name)).map((t) => {
-    const schema = z.toJSONSchema(t.input, { io: "input", unrepresentable: "any" }) as Record<string, unknown>;
-    delete schema.$schema;
-    return { name: t.name, description: t.description, inputSchema: schema };
-  });
+  return defs
+    .filter((t) => !rc?.only || rc.only.includes(t.name))
+    .map((t) => {
+      const schema = z.toJSONSchema(t.input, { io: "input", unrepresentable: "any" }) as Record<string, unknown>;
+      delete schema.$schema;
+      return { name: t.name, description: t.description, inputSchema: schema };
+    });
 }
 
 export type ToolResult = { ok: true; result: unknown } | { ok: false; error: string };

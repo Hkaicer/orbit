@@ -5,7 +5,7 @@
 import { z } from "zod";
 import type { Database } from "../db/database";
 
-export const DEFAULT_PROFILE = `Profil de référence (à remplir, ou à confier à la Découverte par Claude dans Réglages, partie Profil). Les CV font foi.
+export const DEFAULT_PROFILE = `Profil de référence (à remplir, ou à confier à la Découverte par l'IA dans Réglages, partie Profil). Les CV font foi.
 - Formation : à compléter (diplômes, écoles, années).
 - Expériences : à compléter (entreprise, poste, dates, missions clés).
 - Compétences et outils : à compléter.
@@ -51,6 +51,13 @@ export const zContact = z.object({
 export const zSettings = z.object({
   profile: z.string().max(20000).default(DEFAULT_PROFILE),
   scoring: z.string().max(10000).default(DEFAULT_SCORING),
+  /** The AI service: the Claude plan (Claude Code), the ChatGPT plan, or an API key. */
+  provider: z.enum(["claude", "chatgpt", "api"]).default("claude"),
+  /** The model used with ChatGPT or an OpenAI key. Empty: the first one the account offers. */
+  chatgptModel: z.string().max(120).default(""),
+  openaiModel: z.string().max(120).default(""),
+  /** When the user agreed that an API key is billed separately. Set by ORBIT when the key is saved. */
+  apiConsentAt: z.string().nullable().default(null),
   model: z.enum(["haiku", "sonnet", "opus"]).default("sonnet"),
   effort: z.enum(["low", "medium", "high", "xhigh"]).default("medium"),
   defaultMode: z.enum(["auto", "A", "B", "C"]).default("auto"),
@@ -78,6 +85,8 @@ export const zSettings = z.object({
   alertExclude: z.array(z.string().max(60)).max(100).default([]),
   mailLookbackDays: z.number().int().min(7).max(400).default(120),
   followupAfterDays: z.number().int().min(3).max(60).default(14),
+  /** Light, dark, or the theme of the system. */
+  theme: z.enum(["system", "light", "dark"]).default("system"),
   /** The first start is over (welcome screen done or skipped). */
   setupDone: z.boolean().default(false),
   /** Set by ORBIT after each Gmail reading. */

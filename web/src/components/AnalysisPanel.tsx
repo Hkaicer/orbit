@@ -47,12 +47,12 @@ export function AnalysisPanel({ offer }: { offer: Offer }) {
             <div className="analysis-verdict">
               <Badge tone={verdictTone(a.verdict)}>{VERDICT_LABELS[a.verdict]}</Badge>
               <span className="text-3">
-                {a.by === "claude" ? `Analyse de Claude${a.model ? ` (${a.model})` : ""}` : a.by === "local" ? "Estimation locale par mots-clés, sans Claude" : "Analyse importée"} · {fmtDate(a.at)}
+                {a.by === "claude" ? `Analyse de l'IA${a.model ? ` (${a.model})` : ""}` : a.by === "local" ? "Estimation locale par mots-clés, sans l'IA" : "Analyse importée"} · {fmtDate(a.at)}
               </span>
             </div>
             <div className="analysis-redo">
               <Button size="sm" variant="ghost" icon={<Sparkles />} onClick={() => ui.ask(analyzePrompt(offer))}>
-                {a.by === "claude" ? "Refaire avec Claude" : "Analyser avec Claude"}
+                {a.by === "claude" ? "Refaire avec l'IA" : "Analyser avec l'IA"}
               </Button>
             </div>
           </div>
@@ -113,7 +113,7 @@ export function AnalysisPanel({ offer }: { offer: Offer }) {
           <p>Pas encore d'analyse pour cette offre.</p>
           <div className="row-gap">
             <Button variant="primary" icon={<Sparkles />} onClick={() => ui.ask(analyzePrompt(offer))}>
-              Analyser avec Claude
+              Analyser avec l'IA
             </Button>
             <Button loading={busy === "local"} onClick={() => void run("local", () => api.localScore(offer.id), "Estimation locale enregistrée.")}>
               Estimation locale

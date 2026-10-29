@@ -1,6 +1,6 @@
 // Secrets kept on this computer, in their own file next to the database (never
 // in the database, the backups, the exports or the logs). The Gmail app
-// password is stored encrypted with Windows DPAPI.
+// password and the AI secrets are stored encrypted with Windows DPAPI.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -13,6 +13,8 @@ export interface Secrets {
     protectedBy: "dpapi" | "none";
     connectedAt: string;
   };
+  /** The API key and the ChatGPT sign-in, encrypted together (see ai/vault.ts). */
+  ai?: { protectedBy: "dpapi" | "none"; data: string };
 }
 
 export class SecretStore {

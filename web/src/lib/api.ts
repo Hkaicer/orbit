@@ -1,7 +1,9 @@
 // Thin client for ORBIT's local API. Every call stays on this computer.
 
 import type {
+  AiProviders,
   AiStatus,
+  ApiService,
   Analysis,
   Application,
   ApplicationDetail,
@@ -24,6 +26,7 @@ import type {
   OfferStatus,
   PendingAction,
   Proposal,
+  ProviderId,
   RequestMode,
   Status,
   StreamEvent as ServerEvent,
@@ -76,6 +79,10 @@ const qs = (o: Record<string, string | number | undefined | null>) => {
 export interface Settings {
   profile: string;
   scoring: string;
+  provider: ProviderId;
+  chatgptModel: string;
+  openaiModel: string;
+  apiConsentAt: string | null;
   model: ModelChoice;
   effort: "low" | "medium" | "high" | "xhigh";
   defaultMode: RequestMode;
@@ -94,6 +101,7 @@ export interface Settings {
   indeedConnector: boolean;
   autoDocuments: boolean;
   setupDone: boolean;
+  theme: "system" | "light" | "dark";
   alertKeywords: string[];
   alertExclude: string[];
 }
@@ -203,6 +211,12 @@ export const api = {
   backup: () => post<{ name: string }>("/api/backups"),
 
   connectors: (force = false) => get<{ items: ConnectorInfo[]; checkedAt: string | null }>(`/api/ai/connectors${force ? "?force=1" : ""}`),
+  aiProviders: () => get<AiProviders>("/api/ai/providers"),
+  aiModels: () => get<{ id: string; label: string }[]>("/api/ai/models"),
+  saveApiKey: (key: string) => post<{ service: ApiService }>("/api/ai/key", { key, consent: true }),
+  deleteApiKey: () => request<{ removed: boolean }>("DELETE", "/api/ai/key"),
+  chatgptLogin: () => post<{ url: string }>("/api/ai/chatgpt/login"),
+  chatgptLogout: () => post<{ revoked: boolean }>("/api/ai/chatgpt/logout"),
   aiStatus: (force = false) => get<AiStatus>(`/api/ai/status${force ? "?force=1" : ""}`),
   conversation: () => get<{ messages: ChatMessage[]; proposals: Proposal[]; busy: boolean }>("/api/ai/conversation"),
   clearConversation: () => request<{ ok: true }>("DELETE", "/api/ai/conversation"),

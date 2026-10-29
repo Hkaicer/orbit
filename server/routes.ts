@@ -8,7 +8,10 @@ import { z } from "zod";
 import type { StreamEvent } from "../shared/types";
 import { KPI_KEYS, STATUSES } from "../shared/types";
 import { type Agent, conversation } from "./ai/agent";
+import { CALLBACK_PATH, ChatGptError, type ChatGptAuth } from "./ai/chatgptAuth";
 import type { ClaudeRunner } from "./ai/claude";
+import { detectService, type Providers } from "./ai/providers";
+import type { AiVault } from "./ai/vault";
 import type { AppConfig } from "./config";
 import type { Database } from "./db/database";
 import {
@@ -52,6 +55,9 @@ export interface RouteDeps {
   config: AppConfig;
   agent: Agent;
   claude: ClaudeRunner;
+  providers: Providers;
+  vault: AiVault;
+  chatgptAuth: ChatGptAuth;
   mailbox: Mailbox;
   fetch: FetchFn;
   version: string;
@@ -68,7 +74,7 @@ export function createBackup(db: Database, dataDir: string, kind: "manual" | "au
 }
 
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
-  const { db, config, agent, claude, mailbox } = deps;
+  const { db, config, agent, claude, providers, vault, chatgptAuth, mailbox } = deps;
   const settings = () => loadSettings(db);
 
   // ---- general ---------------------------------------------------------------
@@ -81,11 +87,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
     documents: Number(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM documents")?.n ?? 0),
     applications: Number(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM applications")?.n ?? 0),
     // The welcome screen: only on a new install, before any offer or application.
-    firstRun:
-      !settings().setupDone &&
-      !db.get("SELECT 1 AS x FROM offers LIMIT 1") &&
-      !db.get("SELECT 1 AS x FROM applications LIMIT 1") &&
-      !db.get("SELECT 1 AS x FROM messages LIMIT 1"),
+    firstRun: !settings().setupDone && !db.get("SELECT 1 AS x FROM offers LIMIT 1") && !db.get("SELECT 1 AS x FROM applications LIMIT 1") && !db.get("SELECT 1 AS x FROM messages LIMIT 1"),
   }));
   app.get("/api/ai/connectors", async (req) => {
     if (!claude.connectors) return { items: [], checkedAt: null };
@@ -100,6 +102,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
   app.patch("/api/settings", async (req) => {
     const patch = zSettingsPatch.parse(req.body);
     delete (patch as Record<string, unknown>).mailLastSyncAt;
+    // Consent to a billed API key is given only when the key is saved.
+    delete (patch as Record<string, unknown>).apiConsentAt;
     return saveSettings(db, patch);
   });
   app.get("/api/dashboard", async () => dashboard(db, settings().followupAfterDays));
@@ -310,7 +314,60 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
   });
 
   // ---- assistant -------------------------------------------------------------
-  app.get("/api/ai/status", async (req) => claude.status(z.object({ force: z.enum(["0", "1"]).optional() }).parse(req.query).force === "1"));
+  app.get("/api/ai/status", async (req) => providers.status(settings(), z.object({ force: z.enum(["0", "1"]).optional() }).parse(req.query).force === "1"));
+  app.get("/api/ai/providers", async () => providers.overview(settings()));
+  app.get("/api/ai/models", async () => providers.models(settings()));
+
+  // An API key: recognized from its form, checked with a free call, kept encrypted, used only after consent.
+  app.post("/api/ai/key", async (req) => {
+    const body = z.object({ key: z.string().min(20).max(400), consent: z.literal(true) }).parse(req.body);
+    const key = body.key.trim();
+    const service = detectService(key);
+    if (service === "subscription_token") throw new AppError("validation", "C'est un jeton d'abonnement Claude, pas une clé d'API. Pour l'abonnement, choisissez « Abonnement Claude ».");
+    if (!service) throw new AppError("validation", "Ce texte ne ressemble pas à une clé d'API Anthropic (sk-ant-...) ou OpenAI (sk-...).");
+    const check = await providers.verifyKey(service, key);
+    if (check === "rejected") throw new AppError("validation", `${service === "anthropic" ? "Anthropic" : "OpenAI"} a refusé cette clé.`);
+    if (check === "unreachable") throw new AppError("unavailable", "La clé n'a pas pu être vérifiée : le service est injoignable. Réessayez.");
+    await vault.ready();
+    vault.update((s) => ({ ...s, apiKey: { service, key } }));
+    await vault.flush();
+    saveSettings(db, { provider: "api", apiConsentAt: new Date().toISOString() });
+    log.info("api key saved", { service });
+    return { service };
+  });
+  app.delete("/api/ai/key", async () => {
+    await vault.ready();
+    vault.update(({ apiKey: _removed, ...rest }) => rest);
+    await vault.flush();
+    const s = settings();
+    saveSettings(db, { apiConsentAt: null, ...(s.provider === "api" ? { provider: "claude" as const } : {}) });
+    return { removed: true };
+  });
+
+  // Sign in with ChatGPT: OpenAI's page in the browser, then back here.
+  app.post("/api/ai/chatgpt/login", async () => {
+    await vault.ready();
+    return { url: chatgptAuth.startLogin(`http://127.0.0.1:${config.port}`) };
+  });
+  app.get(CALLBACK_PATH, async (req, reply) => {
+    try {
+      await vault.ready();
+      const { account } = await chatgptAuth.finishLogin(req.query as Record<string, string | undefined>);
+      if (account.planUsage) saveSettings(db, { provider: "chatgpt" });
+      log.info("chatgpt signed in", { planUsage: account.planUsage });
+      return reply.redirect("/#/reglages/assistant");
+    } catch (err) {
+      log.warn("chatgpt sign-in failed", { code: err instanceof ChatGptError ? err.code : "unknown" });
+      const message = err instanceof ChatGptError ? err.message : "La connexion à ChatGPT a échoué.";
+      return reply.redirect(`/#/reglages/assistant?erreur=${encodeURIComponent(message)}`);
+    }
+  });
+  app.post("/api/ai/chatgpt/logout", async () => {
+    const r = await chatgptAuth.signOut();
+    await vault.flush();
+    if (settings().provider === "chatgpt") saveSettings(db, { provider: "claude" });
+    return r;
+  });
   app.get("/api/ai/conversation", async () => ({ ...conversation(db), busy: agent.busy }));
   app.delete("/api/ai/conversation", async () => {
     agent.clear();
@@ -318,7 +375,9 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
   });
   app.post("/api/ai/cancel", async () => ({ cancelled: agent.cancel() }));
   app.post("/api/ai/chat", async (req, reply) => {
-    const body = z.object({ message: z.string().max(60_000), mode: z.enum(["auto", "A", "B", "C"]).optional(), model: z.enum(["haiku", "sonnet", "opus"]).optional(), task: z.enum(["discovery"]).optional() }).parse(req.body);
+    const body = z
+      .object({ message: z.string().max(60_000), mode: z.enum(["auto", "A", "B", "C"]).optional(), model: z.enum(["haiku", "sonnet", "opus"]).optional(), task: z.enum(["discovery"]).optional() })
+      .parse(req.body);
     if (agent.busy) throw new AppError("conflict", "ORBIT traite encore la demande précédente.");
     reply.hijack();
     reply.raw.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-cache", "x-accel-buffering": "no" });

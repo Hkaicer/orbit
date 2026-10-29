@@ -76,6 +76,9 @@ export interface ConnectorInfo {
 
 export const MODEL_LABELS: Record<ModelChoice, string> = { haiku: "Haiku", sonnet: "Sonnet", opus: "Opus" };
 
+/** With an OpenAI model (ChatGPT or an OpenAI key) there is one model: the choice sets how much it reasons. */
+export const REASONING_LABELS: Record<ModelChoice, string> = { haiku: "Rapide", sonnet: "Équilibré", opus: "Approfondi" };
+
 export type OfferStatus = "new" | "kept" | "ignored";
 
 export interface Analysis {
@@ -343,11 +346,37 @@ export interface GmailStatus {
   protectedBy: "dpapi" | "none";
 }
 
-export interface AiStatus {
-  state: "ready" | "not_installed" | "not_logged_in" | "api_key_auth" | "error";
+/** The AI service behind the assistant: the Claude plan (Claude Code), the ChatGPT plan, or an API key. */
+export type ProviderId = "claude" | "chatgpt" | "api";
+
+export type ApiService = "anthropic" | "openai";
+
+/** The state of one service, as the service itself reports it. */
+export interface RunnerStatus {
+  state: "ready" | "not_installed" | "not_logged_in" | "api_key_auth" | "missing_key" | "needs_consent" | "error";
   message: string;
   plan: string | null;
   version: string | null;
+  /** The one model used with ChatGPT or an OpenAI key, and the ones to choose from. */
+  model?: string | null;
+  models?: { id: string; label: string }[];
+}
+
+/** The state of the assistant: the service in use, who answers, and how its models are named. */
+export interface AiStatus extends RunnerStatus {
+  provider: ProviderId;
+  /** Claude, ChatGPT or GPT. */
+  assistant: string;
+  /** claude: Haiku, Sonnet and Opus. openai: one model, with more or less reasoning. */
+  family: "claude" | "openai";
+}
+
+/** What is set up for each service, shown in Settings. */
+export interface AiProviders {
+  current: ProviderId;
+  claude: RunnerStatus;
+  chatgpt: { email: string | null; planUsage: boolean } | null;
+  apiKey: { service: ApiService } | null;
 }
 
 export interface ChatMessage {
@@ -356,9 +385,10 @@ export interface ChatMessage {
   content: string;
   meta: {
     mode?: Mode;
-    /** The mode was chosen by Claude (auto). */
+    /** The mode was chosen by the assistant (auto). */
     auto?: boolean;
     model?: string;
+    provider?: ProviderId;
     status?: "ok" | "error";
     proposalId?: string;
     tools?: { name: string; ok: boolean }[];

@@ -77,7 +77,7 @@ export function DashboardView() {
               </Section>
 
               {d.confirmations.length > 0 && (
-                <Section title="Confirmations à donner" hint="Lu dans Gmail ou proposé par Claude. Aucun statut ne change sans votre accord.">
+                <Section title="Confirmations à donner" hint="Lu dans Gmail ou proposé par l'IA. Aucun statut ne change sans votre accord.">
                   <div className="card-stack">
                     {d.confirmations.map((c) => (
                       <ConfirmationCard key={c.evidence.id} item={c} />

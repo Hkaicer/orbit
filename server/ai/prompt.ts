@@ -74,7 +74,7 @@ const MODES: Record<RequestMode, string> = {
 
 /** What the user sees in the conversation when they start a task. */
 export const TASK_MESSAGES: Record<AssistantTask, string> = {
-  discovery: "Découverte par Claude : lis mes CV et mes lettres et crée mon profil.",
+  discovery: "Découverte : lis mes CV et mes lettres et crée mon profil.",
 };
 
 /** The tools a task may use: discovery only reads the documents and writes the profile. */

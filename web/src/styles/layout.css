@@ -353,6 +353,37 @@ body.is-resizing * {
   gap: 4px;
 }
 
+.sb-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sb-footer-row .sb-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-theme {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  color: var(--text-3);
+}
+
+.sb-theme:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.sb-theme svg {
+  width: 16px;
+  height: 16px;
+}
+
 .sb-progress {
   display: flex;
   align-items: center;

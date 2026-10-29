@@ -95,7 +95,7 @@ export const MAIL_LABELS: Record<MailCategory, string> = {
 
 export const ACTOR_LABELS: Record<HistoryEvent["actor"], string> = {
   user: "Vous",
-  agent: "Claude",
+  agent: "Assistant IA",
   system: "ORBIT",
   gmail: "Gmail",
   import: "Import",

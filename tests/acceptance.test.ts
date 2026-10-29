@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
 import { afterEach, describe, expect, it } from "vitest";
-import { KPI_KEYS, type AiStatus, type ApplicationDetail, type Dashboard, type JobsPerformance, type KpiDetails, type Offer, type StreamEvent } from "../shared/types";
+import { KPI_KEYS, type RunnerStatus, type ApplicationDetail, type Dashboard, type JobsPerformance, type KpiDetails, type Offer, type StreamEvent } from "../shared/types";
 import { createApp, type AppHandle } from "../server/app";
 import { ClaudeError, connectorPrefix, parseConnectorList, type ClaudeRunner, type RunRequest } from "../server/ai/claude";
 import { buildPrompt, SYSTEM_PROMPT } from "../server/ai/prompt";
@@ -25,7 +25,7 @@ class FakeClaude implements ClaudeRunner {
   script: Script = async () => "ok";
   getRun: (token: string) => RunContext | undefined = () => undefined;
   prompts: RunRequest[] = [];
-  async status(): Promise<AiStatus> {
+  async status(): Promise<RunnerStatus> {
     return { state: "ready", message: "ok", plan: "pro", version: "test" };
   }
   async run(req: RunRequest) {
@@ -741,7 +741,7 @@ describe("assistant: auto mode, model, discovery, connectors", () => {
       return "Profil créé.";
     };
     const ev = await chatWith(h, { message: "x", task: "discovery" });
-    expect(ev[0]).toMatchObject({ type: "accepted", message: { content: expect.stringContaining("Découverte par Claude") } });
+    expect(ev[0]).toMatchObject({ type: "accepted", message: { content: expect.stringContaining("Découverte : lis mes CV") } });
     expect(doneOf(ev).message.meta.mode).toBe("B");
     const s = (await api(h, "GET", "/api/settings")).json();
     expect(s.profile).toBe(profile);

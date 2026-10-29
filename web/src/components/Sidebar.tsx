@@ -1,7 +1,11 @@
-import { Briefcase, ChartColumnIncreasing, FileText, History, LayoutDashboard, Mail, Plus, Settings, Sparkles, SquareKanban } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Briefcase, ChartColumnIncreasing, FileText, History, LayoutDashboard, Mail, Moon, Plus, Settings, Sparkles, SquareKanban, Sun } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { api } from "../lib/api";
 import { relative } from "../lib/format";
-import { useAiStatus, useDashboard, useGmail } from "../lib/queries";
+import { applyTheme, isDark } from "../lib/theme";
+import { toast } from "../lib/toast";
+import { useAiStatus, useDashboard, useGmail, useSettings } from "../lib/queries";
 import { useUi, type View } from "../lib/store";
 
 const NAV: { view: View; icon: ReactNode; label: string }[] = [
@@ -38,6 +42,39 @@ export function OrbitMark({ size = 22 }: { size?: number }) {
         <path d={RING} fillRule="evenodd" fill={`url(#${id}h)`} />
       </g>
     </svg>
+  );
+}
+
+/** Switches between light and dark at once (the choice "system" is in Settings, Apparence). */
+function ThemeToggle() {
+  const qc = useQueryClient();
+  const theme = useSettings().data?.theme;
+  const [dark, setDark] = useState(isDark);
+  // Follow a choice made in Settings, and the system when the theme is "system".
+  useEffect(() => {
+    setDark(isDark());
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setDark(isDark());
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [theme]);
+  const toggle = async () => {
+    const next = dark ? "light" : "dark";
+    applyTheme(next);
+    setDark(!dark);
+    try {
+      await api.saveSettings({ theme: next });
+      await qc.invalidateQueries({ queryKey: ["settings"] });
+      await qc.invalidateQueries({ queryKey: ["bootstrap"] });
+    } catch {
+      toast.error("Le thème n'a pas pu être enregistré.");
+    }
+  };
+  const label = dark ? "Passer en mode clair" : "Passer en mode sombre";
+  return (
+    <button type="button" className="sb-theme" onClick={() => void toggle()} aria-label={label} data-tip={label} data-tip-pos="right">
+      {dark ? <Sun /> : <Moon />}
+    </button>
   );
 }
 
@@ -94,10 +131,13 @@ export function Sidebar() {
             <span className="truncate">{g?.email ? (g.lastSyncAt ? `Lu ${relative(g.lastSyncAt)}` : "Jamais lu") : "Connecter"}</span>
           </div>
         </button>
-        <button type="button" className={`sb-item ${ui.view === "settings" ? "is-active" : ""}`} aria-current={ui.view === "settings" ? "page" : undefined} onClick={() => ui.go("settings")}>
-          <Settings />
-          <span>Réglages</span>
-        </button>
+        <div className="sb-footer-row">
+          <button type="button" className={`sb-item ${ui.view === "settings" ? "is-active" : ""}`} aria-current={ui.view === "settings" ? "page" : undefined} onClick={() => ui.go("settings")}>
+            <Settings />
+            <span>Réglages</span>
+          </button>
+          <ThemeToggle />
+        </div>
       </div>
     </aside>
   );

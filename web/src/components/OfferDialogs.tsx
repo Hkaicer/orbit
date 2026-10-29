@@ -103,7 +103,7 @@ export function ImportOfferDialog() {
                 <p>{result.message}</p>
                 <div className="row-gap">
                   <Button size="sm" variant="primary" icon={<Sparkles />} onClick={() => askClaude(result.text, result.url)}>
-                    Préparer la demande à Claude
+                    Préparer la demande à l'IA
                   </Button>
                   <Button
                     size="sm"
@@ -132,7 +132,7 @@ export function ImportOfferDialog() {
               </Field>
             </div>
             <div className="field-row">
-              <Field label="Entreprise" htmlFor="text-company" hint="Nécessaire seulement pour créer sans Claude.">
+              <Field label="Entreprise" htmlFor="text-company" hint="Nécessaire seulement pour créer sans l'IA.">
                 <input id="text-company" className="input" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
               </Field>
               <Field label="Poste" htmlFor="text-title">
@@ -145,7 +145,7 @@ export function ImportOfferDialog() {
         {tab === "form" && <OfferFields value={form} onChange={setForm} />}
       </div>
       <div className="dialog-footer">
-        <span className="dialog-note text-3">{tab === "text" ? "Rien n'est envoyé à Claude tant que vous n'avez pas validé la demande." : ""}</span>
+        <span className="dialog-note text-3">{tab === "text" ? "Rien n'est envoyé à l'IA tant que vous n'avez pas validé la demande." : ""}</span>
         <Button variant="ghost" onClick={close}>
           Annuler
         </Button>
@@ -161,10 +161,10 @@ export function ImportOfferDialog() {
               disabled={!text.trim() || !form.company.trim() || !form.title.trim()}
               onClick={() => void createByHand({ ...form, url: url.trim() || null, description: text }, "texte collé")}
             >
-              Créer sans Claude
+              Créer sans l'IA
             </Button>
             <Button variant="primary" icon={<Sparkles />} disabled={text.trim().length < 40} onClick={() => askClaude(text, url.trim() || undefined)}>
-              Préparer pour Claude
+              Préparer pour l'IA
             </Button>
           </>
         )}

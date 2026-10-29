@@ -12,7 +12,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { AiStatus, ConnectorInfo } from "../../shared/types";
+import type { ConnectorInfo, RunnerStatus } from "../../shared/types";
+import { AssistantError as ClaudeError, type AssistantRunner, type RunRequest, type RunResult } from "./runner";
 import { log } from "../logger";
 
 const execFileAsync = promisify(execFile);
@@ -93,28 +94,9 @@ export function findClaude(configured: string): string | null {
 const needsShell = (bin: string) => /\.(cmd|bat)$/i.test(bin);
 const quote = (arg: string) => (/[\s"&|<>^]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg);
 
-export class ClaudeError extends Error {
-  constructor(
-    readonly code: "unavailable" | "rate_limit" | "auth" | "timeout" | "cancelled" | "network" | "unknown",
-    message: string,
-  ) {
-    super(message);
-    this.name = "ClaudeError";
-  }
-}
-
-export interface RunRequest {
-  system: string;
-  prompt: string;
-  model: string;
-  effort: string | null;
-  token: string;
-  timeoutMs: number;
-  signal: AbortSignal;
-  onEvent: (e: { type: "text"; delta: string } | { type: "status"; text: string }) => void;
-  /** claude.ai connectors allowed for this request, e.g. mcp__claude_ai_Indeed. Empty: ORBIT's own tools only. */
-  connectors?: string[];
-}
+export { ClaudeError };
+export type { RunRequest, RunResult };
+export type ClaudeRunner = AssistantRunner;
 
 /** The claude.ai connectors of the account that ORBIT never lets the assistant use. */
 export const BLOCKED_CONNECTORS = [
@@ -154,21 +136,8 @@ function userPluginsOff(): Record<string, boolean> {
   }
 }
 
-export interface RunResult {
-  text: string;
-  model: string | null;
-}
-
-/** What a run needs from Claude: the real CLI, or a stand-in in tests. */
-export interface ClaudeRunner {
-  status(force?: boolean): Promise<AiStatus>;
-  run(req: RunRequest): Promise<RunResult>;
-  /** The claude.ai connectors of the account (not available in tests). */
-  connectors?(force?: boolean): Promise<ConnectorInfo[]>;
-}
-
-export class ClaudeCli implements ClaudeRunner {
-  private cache: { at: number; status: AiStatus; bin: string | null } | null = null;
+export class ClaudeCli implements AssistantRunner {
+  private cache: { at: number; status: RunnerStatus; bin: string | null } | null = null;
   private connectorCache: { at: number; items: ConnectorInfo[] } | null = null;
 
   constructor(
@@ -199,10 +168,10 @@ export class ClaudeCli implements ClaudeRunner {
     return this.connectorCache.items;
   }
 
-  async status(force = false): Promise<AiStatus> {
+  async status(force = false): Promise<RunnerStatus> {
     if (!force && this.cache && Date.now() - this.cache.at < 60_000) return this.cache.status;
     const bin = findClaude(this.claudePath());
-    let status: AiStatus;
+    let status: RunnerStatus;
     if (!bin) {
       status = { state: "not_installed", message: "Claude Code n'est pas installé. Installez-le et connectez-vous avec votre compte Claude.", plan: null, version: null };
     } else {

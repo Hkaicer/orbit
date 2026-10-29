@@ -23,7 +23,8 @@ export interface Route {
 }
 
 export function routeFromHash(hash = window.location.hash): Route {
-  const [slug, id] = hash.replace(/^#\/?/, "").split("/");
+  // A link may carry a message after "?" (back from signing in to ChatGPT): it is not part of the place.
+  const [slug, id] = hash.replace(/^#\/?/, "").split("?")[0]!.split("/");
   const view = (Object.keys(SLUGS) as View[]).find((v) => SLUGS[v] === slug) ?? "dashboard";
   return { view, id: id ? decodeURIComponent(id) : null };
 }
@@ -38,7 +39,7 @@ interface UiState extends Route {
   model: ModelChoice | null;
   /** A task waiting to be sent by the assistant (discovery). */
   task: AssistantTask | null;
-  /** Text waiting in the assistant's composer (set by "ask Claude" buttons). */
+  /** Text waiting in the assistant's composer (set by "ask the assistant" buttons). */
   draft: string;
   importOpen: boolean;
   go: (view: View, id?: string | null) => void;

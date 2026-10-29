@@ -143,7 +143,7 @@ function AssistantDashboard({ p }: { p: JobsPerformance }) {
   return (
     <Section title="Ce que l'assistant a fait">
       <div className="perf-kpis">
-        <StatTile label="Demandes" value={a.requests} hint="envoyées à Claude" />
+        <StatTile label="Demandes" value={a.requests} hint="envoyées à l'IA" />
         <StatTile label="Offres ajoutées" value={a.offersAdded} hint={`${a.analyses} analyse${a.analyses > 1 ? "s" : ""}`} />
         <StatTile label="CV et lettres" value={a.documents} hint="préparations de documents" />
         <StatTile
@@ -153,7 +153,7 @@ function AssistantDashboard({ p }: { p: JobsPerformance }) {
           hint={`${a.proposalsDiscarded} écartée${a.proposalsDiscarded > 1 ? "s" : ""} · ${a.statusProposals} statut${a.statusProposals > 1 ? "s" : ""} proposé${a.statusProposals > 1 ? "s" : ""}`}
         />
       </div>
-      <p className="perf-note">Compté à partir de l'historique d'ORBIT. La consommation de votre abonnement Claude n'est pas visible ici : elle se suit dans votre compte claude.ai.</p>
+      <p className="perf-note">Compté à partir de l'historique d'ORBIT. La consommation de votre abonnement ou de votre clé d'API ne se voit pas ici : elle se suit sur le site du service (claude.ai, chatgpt.com ou la console de la clé).</p>
     </Section>
   );
 }

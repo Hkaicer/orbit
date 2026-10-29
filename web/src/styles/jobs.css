@@ -2168,3 +2168,83 @@
   height: 13px;
   vertical-align: -2px;
 }
+
+/* ---- AI services ------------------------------------------------------------ */
+
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.provider-card.is-current {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.provider-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.provider-radio {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-strong);
+}
+
+.provider-radio.is-on {
+  border: 4px solid var(--accent);
+}
+
+.provider-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.provider-title {
+  font-weight: 600;
+}
+
+.provider-state {
+  padding-left: 24px;
+}
+
+.provider-key {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.provider-key .input {
+  width: 100%;
+  max-width: 420px;
+}
+
+.provider-consent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+}

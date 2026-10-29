@@ -36,7 +36,7 @@ export function HistoryView() {
               options={[
                 { value: "all", label: "Tout" },
                 { value: "user", label: "Vous" },
-                { value: "agent", label: "Claude" },
+                { value: "agent", label: "Assistant IA" },
                 { value: "gmail", label: "Gmail" },
                 { value: "import", label: "Import" },
                 { value: "system", label: "ORBIT" },

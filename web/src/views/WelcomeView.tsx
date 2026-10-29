@@ -1,6 +1,6 @@
-// First start of a new install: where the documents are, whether Claude is
-// ready, then the profile, written by the user or handed to Claude
-// ("Découverte par Claude"). Gmail stays optional, on its own page.
+// First start of a new install: where the documents are, which AI service
+// answers, then the profile, written by the user or handed to the AI
+// ("Découverte par l'IA"). Gmail stays optional, on its own page.
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, FolderOpen, Mail, PenLine, RefreshCw, Sparkles } from "lucide-react";
@@ -77,7 +77,7 @@ export function WelcomeView() {
           </div>
         </Step>
 
-        <Step n={2} title="Claude" done={ready} icon={<Sparkles />}>
+        <Step n={2} title="Assistant IA" done={ready} icon={<Sparkles />}>
           {ai.isLoading ? (
             <Spinner label="Vérification" />
           ) : (
@@ -91,11 +91,16 @@ export function WelcomeView() {
               )}
             </div>
           )}
-          {!ready && <p className="text-3 small">ORBIT utilise Claude Code avec votre abonnement Claude. Installez-le, puis lancez « claude auth login » dans un terminal.</p>}
+          <div className="welcome-row">
+            <span className="text-3 small grow">ORBIT marche avec votre abonnement Claude (avec Claude Code), votre abonnement ChatGPT, ou une clé d'API Anthropic ou OpenAI.</span>
+            <Button size="sm" variant="ghost" onClick={() => ui.go("settings", "assistant")}>
+              Choisir le service
+            </Button>
+          </div>
         </Step>
 
         <Step n={3} title="Votre profil" icon={<PenLine />}>
-          <p className="text-2 small">Le profil résume votre parcours et ce que vous cherchez. Claude s'en sert pour noter les offres et adapter vos CV et vos lettres.</p>
+          <p className="text-2 small">Le profil résume votre parcours et ce que vous cherchez. L'IA s'en sert pour noter les offres et adapter vos CV et vos lettres.</p>
           <div className="welcome-choices">
             <button
               type="button"
@@ -108,9 +113,9 @@ export function WelcomeView() {
               }}
             >
               <Sparkles />
-              <span className="welcome-choice-title">Découverte par Claude</span>
-              <span className="welcome-choice-text">Claude lit vos CV et vos lettres et crée votre premier profil. Vous le relisez ensuite. Aucune offre n'est créée.</span>
-              {(!ready || docs === 0) && <span className="welcome-choice-note">{docs === 0 ? "Ajoutez d'abord vos documents." : "Claude doit d'abord être prêt."}</span>}
+              <span className="welcome-choice-title">Découverte par {ready ? ai.data?.assistant : "l'IA"}</span>
+              <span className="welcome-choice-text">L'IA lit vos CV et vos lettres et crée votre premier profil. Vous le relisez ensuite. Aucune offre n'est créée.</span>
+              {(!ready || docs === 0) && <span className="welcome-choice-note">{docs === 0 ? "Ajoutez d'abord vos documents." : "L'assistant IA doit d'abord être prêt."}</span>}
             </button>
             <button
               type="button"

@@ -4,6 +4,7 @@ import { ImportOfferDialog } from "./components/OfferDialogs";
 import { Sidebar } from "./components/Sidebar";
 import { ConfirmHost, Toaster } from "./components/ui";
 import { useBootstrap } from "./lib/queries";
+import { applyTheme } from "./lib/theme";
 import { routeFromHash, useUi } from "./lib/store";
 import { ApplicationsView } from "./views/ApplicationsView";
 import { DashboardView } from "./views/DashboardView";
@@ -18,6 +19,12 @@ import { WelcomeView } from "./views/WelcomeView";
 export function App() {
   const ui = useUi();
   const boot = useBootstrap();
+  const theme = boot.data?.settings.theme;
+  const welcome = Boolean(boot.data?.firstRun) && ui.view === "dashboard";
+
+  useEffect(() => {
+    if (theme) applyTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     const onPop = () => useUi.setState(routeFromHash());
@@ -47,15 +54,15 @@ export function App() {
       <Sidebar />
       <div className={`scrim ${ui.sidebarOpen ? "is-open" : ""}`} onClick={() => ui.set({ sidebarOpen: false })} aria-hidden />
       <main className="main">
-        {boot.data?.firstRun && <WelcomeView />}
-        {!boot.data?.firstRun && ui.view === "dashboard" && <DashboardView />}
-        {!boot.data?.firstRun && ui.view === "offers" && <OffersView />}
-        {!boot.data?.firstRun && ui.view === "applications" && <ApplicationsView />}
-        {!boot.data?.firstRun && ui.view === "performance" && <PerformanceView />}
-        {!boot.data?.firstRun && ui.view === "documents" && <DocumentsView />}
-        {!boot.data?.firstRun && ui.view === "mail" && <MailView />}
-        {!boot.data?.firstRun && ui.view === "history" && <HistoryView />}
-        {!boot.data?.firstRun && ui.view === "settings" && <SettingsView />}
+        {welcome && <WelcomeView />}
+        {!welcome && ui.view === "dashboard" && <DashboardView />}
+        {ui.view === "offers" && <OffersView />}
+        {ui.view === "applications" && <ApplicationsView />}
+        {ui.view === "performance" && <PerformanceView />}
+        {ui.view === "documents" && <DocumentsView />}
+        {ui.view === "mail" && <MailView />}
+        {ui.view === "history" && <HistoryView />}
+        {ui.view === "settings" && <SettingsView />}
       </main>
       {ui.assistantOpen && <div className="assistant-scrim" onClick={() => ui.set({ assistantOpen: false })} aria-hidden />}
       {ui.assistantOpen && <AssistantPanel />}

@@ -8,7 +8,8 @@ import { addEvent } from "../domain/history";
 import { AppError, newId } from "../errors";
 import { log } from "../logger";
 import { DEFAULT_PROFILE, loadSettings } from "../services/settings";
-import { ClaudeError, type ClaudeRunner } from "./claude";
+import type { Picked } from "./providers";
+import { AssistantError } from "./runner";
 import { buildPrompt, SYSTEM_PROMPT, TASK_MESSAGES, TASK_TOOLS } from "./prompt";
 import { applyStaged, type RunContext, type StagedOp, type ToolDeps } from "./tools";
 
@@ -47,7 +48,8 @@ export class Agent {
 
   constructor(
     private readonly db: Database,
-    private readonly claude: ClaudeRunner,
+    /** The AI service chosen in Settings, for each request. */
+    private readonly pick: (settings: ReturnType<typeof loadSettings>) => Promise<Picked>,
     private readonly deps: () => Omit<ToolDeps, "settings">,
   ) {}
 
@@ -97,8 +99,11 @@ export class Agent {
       onTool: (c) => emit({ type: "tool", name: c.name, ok: c.ok }),
     };
     this.runs.set(rc.token, rc);
+    let picked: Picked["provider"] | null = null;
     try {
-      const result = await this.claude.run({
+      const { provider, runner } = await this.pick(settings);
+      picked = provider;
+      const result = await runner.run({
         system: SYSTEM_PROMPT,
         prompt: buildPrompt(text, asked, input.task ? [] : history, settings, new Date(), input.task),
         model,
@@ -106,7 +111,9 @@ export class Agent {
         token: rc.token,
         timeoutMs: settings.timeoutSec * 1000,
         signal: controller.signal,
-        connectors: settings.indeedConnector && !input.task ? ["mcp__claude_ai_Indeed"] : [],
+        // claude.ai connectors exist only with Claude Code.
+        connectors: provider === "claude" && settings.indeedConnector && !input.task ? ["mcp__claude_ai_Indeed"] : [],
+        run: rc,
         onEvent: (e) => emit(e.type === "text" ? { type: "text", delta: e.delta } : { type: "status", text: e.text }),
       });
       rc.closed = true;
@@ -120,6 +127,7 @@ export class Agent {
         mode: rc.mode,
         ...(auto ? { auto } : {}),
         model: result.model ?? model,
+        provider,
         status: "ok",
         tools: rc.calls.map((c) => ({ name: c.name, ok: c.ok })),
         durationMs: Date.now() - started,
@@ -130,11 +138,18 @@ export class Agent {
       emit({ type: "done", message: reply, proposal });
     } catch (err) {
       rc.closed = true;
-      const message = err instanceof ClaudeError || err instanceof AppError ? err.message : "Une erreur est survenue avec Claude. Vos données n'ont pas été modifiées.";
-      if (!(err instanceof ClaudeError)) log.error("agent run failed", { error: (err as Error).message });
+      const message = err instanceof AssistantError || err instanceof AppError ? err.message : "Une erreur est survenue avec l'assistant IA. Vos données n'ont pas été modifiées.";
+      if (!(err instanceof AssistantError)) log.error("agent run failed", { error: (err as Error).message });
       emit({
         type: "error",
-        message: addMessage(this.db, "assistant", message, { mode: rc.mode, ...(auto ? { auto } : {}), status: "error", tools: rc.calls.map((c) => ({ name: c.name, ok: c.ok })), durationMs: Date.now() - started }),
+        message: addMessage(this.db, "assistant", message, {
+          mode: rc.mode,
+          ...(auto ? { auto } : {}),
+          ...(picked ? { provider: picked } : {}),
+          status: "error",
+          tools: rc.calls.map((c) => ({ name: c.name, ok: c.ok })),
+          durationMs: Date.now() - started,
+        }),
       });
     } finally {
       this.runs.delete(rc.token);

@@ -3,12 +3,16 @@ import path from "node:path";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { Agent } from "./ai/agent";
+import { ChatGptAuth, type Fetch } from "./ai/chatgptAuth";
 import { ClaudeCli, type ClaudeRunner } from "./ai/claude";
+import { Providers, type KeyCheck } from "./ai/providers";
+import { AiVault } from "./ai/vault";
+import type { ApiService } from "../shared/types";
 import { registerMcp } from "./ai/mcp";
 import { dbPath, type AppConfig } from "./config";
 import { Database } from "./db/database";
 import { errorReply } from "./errors";
-import type { Protector } from "./mail/dpapi";
+import { dpapi, type Protector } from "./mail/dpapi";
 import { Mailbox, type MakeReader } from "./mail/mailbox";
 import { registerRoutes } from "./routes";
 import { SecretStore } from "./secrets";
@@ -27,6 +31,9 @@ export interface AppOptions {
   protector?: Protector;
   mailReader?: MakeReader;
   fetch?: FetchFn;
+  /** Requests to OpenAI and Anthropic (a stand-in in tests). */
+  aiFetch?: Fetch;
+  verifyKey?: (service: ApiService, key: string) => Promise<KeyCheck>;
 }
 
 export interface AppHandle {
@@ -34,6 +41,7 @@ export interface AppHandle {
   db: Database;
   agent: Agent;
   mailbox: Mailbox;
+  vault: AiVault;
 }
 
 const LOCAL_NAMES = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -46,12 +54,29 @@ export async function createApp(opts: AppOptions): Promise<AppHandle> {
   const secrets = new SecretStore(opts.secretsFile === undefined ? path.join(config.dataDir, "secrets.json") : opts.secretsFile);
   const mailbox = new Mailbox(secrets, opts.protector, opts.mailReader);
   const fetchFn = opts.fetch ?? fetch;
-  const claude = opts.claude ?? new ClaudeCli(path.join(config.dataDir, "agent"), (token) => `http://127.0.0.1:${config.port}/mcp/${token}`, () => loadSettings(db).claudePath);
-  const agent = new Agent(db, claude, () => ({ db, config, mailbox, fetch: fetchFn }));
+  const claude =
+    opts.claude ??
+    new ClaudeCli(
+      path.join(config.dataDir, "agent"),
+      (token) => `http://127.0.0.1:${config.port}/mcp/${token}`,
+      () => loadSettings(db).claudePath,
+    );
+  const vault = new AiVault(secrets, opts.protector ?? dpapi);
+  void vault.ready();
+  const auth = new ChatGptAuth(vault, opts.aiFetch);
+  const providers = new Providers(claude, { vault, auth, settings: () => loadSettings(db), fetch: opts.aiFetch, verifyKey: opts.verifyKey });
+  const agent = new Agent(
+    db,
+    (s) => providers.pick(s),
+    () => ({ db, config, mailbox, fetch: fetchFn }),
+  );
 
   // Local only: requests addressed to this computer, and no state change coming from another website.
   app.addHook("onRequest", async (req, reply) => {
-    const hostname = (req.headers.host ?? "").replace(/:\d+$/, "").replace(/^\[|\]$/g, "").toLowerCase();
+    const hostname = (req.headers.host ?? "")
+      .replace(/:\d+$/, "")
+      .replace(/^\[|\]$/g, "")
+      .toLowerCase();
     if (!LOCAL_NAMES.has(hostname)) return reply.code(403).send({ error: { code: "forbidden", message: "ORBIT n'accepte que les requêtes de cet ordinateur." } });
     const origin = req.headers.origin;
     if (origin && req.method !== "GET" && req.method !== "HEAD") {
@@ -70,7 +95,7 @@ export async function createApp(opts: AppOptions): Promise<AppHandle> {
   });
 
   registerMcp(app, agent, VERSION);
-  registerRoutes(app, { db, config, agent, claude, mailbox, fetch: fetchFn, version: VERSION });
+  registerRoutes(app, { db, config, agent, claude, providers, vault, chatgptAuth: auth, mailbox, fetch: fetchFn, version: VERSION });
 
   const notFound = (url: string) => url.startsWith("/api") || url.startsWith("/mcp");
   if (fs.existsSync(config.webDir)) {
@@ -83,5 +108,5 @@ export async function createApp(opts: AppOptions): Promise<AppHandle> {
         : reply.type("text/html").send("<p style='font-family:sans-serif'>L'interface n'est pas encore construite : lancez <code>npm run build</code>.</p>"),
     );
   }
-  return { app, db, agent, mailbox };
+  return { app, db, agent, mailbox, vault };
 }

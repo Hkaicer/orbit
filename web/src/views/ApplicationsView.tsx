@@ -144,9 +144,9 @@ function List({ apps }: { apps: Application[] }) {
 }
 
 const MODE_HINTS: Record<Mode, string> = {
-  A: "Claude prépare chaque changement et vous le validez avant qu'il soit fait.",
+  A: "L'IA prépare chaque changement et vous le validez avant qu'il soit fait.",
   B: "Les étapes locales (fiche, analyse, dossier) sont faites seules. Tout ce qui sort de l'ordinateur attend votre accord.",
-  C: "Claude enchaîne le plus d'étapes possible. Tout ce qui sort de l'ordinateur attend toujours votre accord.",
+  C: "L'IA enchaîne le plus d'étapes possible. Tout ce qui sort de l'ordinateur attend toujours votre accord.",
 };
 
 function ApplicationPage({ id }: { id: string }) {
@@ -199,7 +199,7 @@ function ApplicationBody({ app: a }: { app: ApplicationDetail }) {
         <span className="app-strip-mode">
           <span className="text-3">Mode</span>
           <Segmented<Mode>
-            label="Mode d'action de Claude pour cette candidature"
+            label="Mode d'action de l'IA pour cette candidature"
             value={a.mode}
             onChange={(m) => void run("mode", () => api.setMode(a.id, m), `Mode ${MODE_LABELS[m]}.`)}
             options={(["A", "B", "C"] as Mode[]).map((m) => ({ value: m, label: m, ariaLabel: `${MODE_LABELS[m]} : ${MODE_HINTS[m]}` }))}
@@ -310,7 +310,7 @@ function ApplicationBody({ app: a }: { app: ApplicationDetail }) {
             <p className="side-note">Fiche de l'offre, analyse, suivi et sources, dans le dossier Applications d'ORBIT. Le dossier d'origine n'est jamais modifié.</p>
           </div>
           <div className="side-card">
-            <h3 className="side-title">Avec Claude</h3>
+            <h3 className="side-title">Avec l'IA</h3>
             <div className="side-actions">
               <Button
                 size="sm"
@@ -426,7 +426,7 @@ function MadeDocumentsCard({ app: a }: { app: ApplicationDetail }) {
         </ul>
       )}
       <Button size="sm" icon={<Sparkles />} onClick={() => ui.ask(documentsPrompt({ id: a.offerId, company: a.offer.company, title: a.offer.title }, a.id))}>
-        {groups.length ? "Nouvelle version avec Claude" : "Préparer avec Claude"}
+        {groups.length ? "Nouvelle version avec l'IA" : "Préparer avec l'IA"}
       </Button>
       <p className="side-note">
         Les fichiers sont dans le dossier ORBIT de la candidature. Le bouton PDF ou DOCX les enregistre dans vos Téléchargements. Une nouvelle version ne remplace jamais l'ancienne.

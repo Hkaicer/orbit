@@ -60,7 +60,7 @@ export function DocumentsView() {
                   <PathLink path={r} label={fileName(r)} folder />
                 </span>
               ))}
-              . Un document marqué privé n'est jamais transmis à Claude.
+              . Un document marqué privé n'est jamais transmis à l'IA.
             </span>
           </div>
 
@@ -166,7 +166,7 @@ function DocRow({ doc: d, onPreview }: { doc: LibraryDocument; onPreview: () => 
           <Switch
             checked={d.private}
             label={`Privé : ${d.name}`}
-            onChange={(v) => void run("flag", () => api.documentFlags(d.id, { private: v }), v ? "Ce document ne sera jamais transmis à Claude." : "Document de nouveau consultable par Claude.")}
+            onChange={(v) => void run("flag", () => api.documentFlags(d.id, { private: v }), v ? "Ce document ne sera jamais transmis à l'IA." : "Document de nouveau consultable par Claude.")}
           />
           <span>Privé</span>
         </label>

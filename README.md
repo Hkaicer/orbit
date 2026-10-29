@@ -7,7 +7,7 @@
 
 <h1 align="center">ORBIT</h1>
 
-<p align="center">Un assistant local et privé pour une recherche de stage ou d'emploi : offres, candidatures, CV et lettres adaptés, réponses reçues dans Gmail. Claude fait le travail de fond, rien ne part sans votre accord.</p>
+<p align="center">Un assistant local et privé pour une recherche de stage ou d'emploi : offres, candidatures, CV et lettres adaptés, réponses reçues dans Gmail. L'IA de votre choix (Claude, ChatGPT ou une clé d'API) fait le travail de fond, rien ne part sans votre accord.</p>
 
 ## Ce que fait ORBIT
 
@@ -21,6 +21,7 @@
 - **Performance** : offres trouvées, envois, taux et délai de réponse, étapes franchies, sources des offres.
 - **Documents** : vos dossiers de CV et de lettres sont lus sans jamais être modifiés. ORBIT repère les versions de référence, les versions adaptées et les copies identiques.
 - **Exports** : tableau de suivi en Excel ou en CSV, sauvegardes de la base.
+- **Apparence** : thème clair, sombre ou celui du système.
 
 ## Ce qu'ORBIT ne fait jamais
 
@@ -28,7 +29,7 @@
 - Considérer une candidature comme envoyée parce qu'un dossier existe. Les statuts qui décrivent un fait extérieur demandent une preuve confirmée ou votre déclaration.
 - Modifier, déplacer ou renommer vos documents.
 - Écrire dans Gmail : pas d'envoi, pas de suppression, pas de déplacement, pas de changement de l'état lu.
-- Transmettre à Claude un document marqué privé.
+- Transmettre à l'IA un document marqué privé.
 - Se connecter à vos comptes LinkedIn, Indeed ou HelloWork, ou postuler à votre place.
 - Écouter sur le réseau : le serveur n'accepte que les requêtes de cet ordinateur.
 
@@ -36,7 +37,10 @@
 
 - Windows 10 ou 11. Le chiffrement du mot de passe Gmail, l'ouverture des dossiers et le lanceur utilisent Windows.
 - [Node.js](https://nodejs.org) 22.13 ou plus récent.
-- [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), connecté avec un abonnement Claude (Pro ou Max). ORBIT refuse une clé d'API, pour ne pas créer de facturation séparée.
+- Un service d'IA, au choix :
+  - un abonnement Claude (Pro ou Max), avec [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) installé et connecté,
+  - un abonnement ChatGPT, avec une connexion sur la page d'OpenAI,
+  - une clé d'API Anthropic ou OpenAI, facturée à part selon la consommation.
 - [LibreOffice](https://www.libreoffice.org), facultatif, pour les PDF. Sans lui, les CV et les lettres sont faits en DOCX seulement.
 - Gmail, facultatif, avec un mot de passe d'application.
 
@@ -62,35 +66,41 @@ L'icône démarre le serveur en arrière-plan et l'arrête environ 20 minutes ap
 Un écran d'accueil vous guide en trois étapes :
 
 1. **Vos documents** : les dossiers où sont vos CV et vos lettres. Ils sont lus, jamais modifiés.
-2. **Claude** : ORBIT vérifie que Claude Code est installé et connecté.
-3. **Votre profil** : remplissez-le vous-même, ou cliquez sur « Découverte par Claude ». Claude lit alors vos CV et vos lettres et écrit un premier profil (formation, expériences, compétences, ce que vous cherchez). Ce qu'il déduit est marqué « à confirmer », ce qui manque « à compléter ». La découverte ne crée aucune offre.
+2. **Assistant IA** : ORBIT vérifie le service choisi. C'est l'abonnement Claude par défaut, et le bouton « Choisir le service » mène aux deux autres.
+3. **Votre profil** : remplissez-le vous-même, ou lancez la « Découverte par l'IA ». L'IA lit alors vos CV et vos lettres et écrit un premier profil (formation, expériences, compétences, ce que vous cherchez). Ce qu'elle déduit est marqué « à confirmer », ce qui manque « à compléter ». La découverte ne crée aucune offre.
 
-Le profil se relit ensuite dans Réglages, partie Profil. Claude le reçoit à chaque demande.
+Le profil se relit ensuite dans Réglages, partie Profil. L'IA le reçoit à chaque demande.
 
 ## L'assistant
 
-L'assistant passe par Claude Code (`claude -p`) et votre abonnement. À chaque demande, Claude reçoit votre message, le profil, la grille d'analyse et les derniers échanges. Il ne lit le reste (offres, documents, e-mails) qu'avec les outils d'ORBIT, qui sont affichés sous chaque réponse. Il n'a accès ni aux fichiers de l'ordinateur ni à internet en dehors de ces outils.
+Le service se choisit dans Réglages, partie Assistant IA :
+
+- **Abonnement Claude** : ORBIT lance Claude Code (`claude -p`) avec votre abonnement. C'est le seul service qui peut utiliser les connecteurs claude.ai, comme Indeed.
+- **Abonnement ChatGPT** : « Continuer avec ChatGPT » ouvre la page de connexion d'OpenAI, où vous autorisez ORBIT à utiliser votre abonnement. L'usage compte dans votre abonnement ChatGPT.
+- **Clé d'API** : une clé Anthropic ou OpenAI, vérifiée puis enregistrée seulement après votre accord sur la facturation à part.
+
+La clé d'API et la connexion ChatGPT sont chiffrées avec la protection Windows de votre session, comme le mot de passe Gmail. Quel que soit le service, l'IA reçoit votre message, le profil, la grille d'analyse et les derniers échanges. Elle ne lit le reste (offres, documents, e-mails) qu'avec les outils d'ORBIT, affichés sous chaque réponse, et n'a accès ni aux fichiers de l'ordinateur ni à internet en dehors de ces outils.
 
 Le mode se choisit pour chaque demande :
 
-- **Auto** : Claude choisit lui-même. Il fait tout de suite ce que vous demandez clairement et vous propose le reste avant de le faire.
-- **A** : Claude prépare les changements, rien n'est fait avant votre validation.
+- **Auto** : l'IA choisit elle-même. Elle fait tout de suite ce que vous demandez clairement et vous propose le reste avant de le faire.
+- **A** : l'IA prépare les changements, rien n'est fait avant votre validation.
 - **B** : les étapes locales (fiche, analyse, dossier) sont faites seules.
-- **C** : Claude enchaîne le plus d'étapes possible.
+- **C** : l'IA enchaîne le plus d'étapes possible.
 
-Dans tous les modes, un envoi ou un dépôt attend votre accord. Le modèle se change aussi pour chaque demande : Haiku pour les questions simples, Sonnet pour le travail courant, Opus pour les CV, les lettres et les analyses fines.
+Dans tous les modes, un envoi ou un dépôt attend votre accord. Le modèle se change aussi pour chaque demande. Avec Claude : Haiku pour les questions simples, Sonnet pour le travail courant, Opus pour les CV, les lettres et les analyses fines. Avec un modèle OpenAI : Rapide, Équilibré ou Approfondi, selon la réflexion demandée.
 
 ## Trouver des offres
 
 **Alertes e-mail.** Créez des alertes sur LinkedIn, Indeed, HelloWork, Welcome to the Jungle ou APEC, envoyées à l'adresse Gmail connectée. À chaque lecture de Gmail, ORBIT crée une fiche pour chaque offre dont le titre contient un mot de votre recherche et aucun mot exclu (Réglages, partie Alertes d'offres). Seul le lien propre de l'offre est gardé, jamais les jetons de connexion des e-mails.
 
-**Connecteur Indeed.** Si le connecteur Indeed est activé sur votre compte claude.ai, demandez par exemple « Cherche sur Indeed des stages en cybersécurité à Lyon ». L'assistant ne peut pas postuler. Vos autres connecteurs claude.ai restent interdits à l'assistant. Leur état est visible dans Réglages, partie Connecteurs.
+**Connecteur Indeed.** Avec l'abonnement Claude, si le connecteur Indeed est activé sur votre compte claude.ai, demandez par exemple « Cherche sur Indeed des stages en cybersécurité à Lyon ». L'assistant ne peut pas postuler. Vos autres connecteurs claude.ai restent interdits à l'assistant. Leur état est visible dans Réglages, partie Connecteurs.
 
-Il n'existe pas de connecteur claude.ai pour chercher des offres sur LinkedIn ou HelloWork : ces sites arrivent par leurs alertes e-mail.
+Il n'existe pas de connecteur claude.ai pour chercher des offres ou postuler sur LinkedIn ou HelloWork. Le connecteur « LinkedIn Hiring Pro » sert seulement aux recruteurs à publier une offre. Ces sites arrivent donc par leurs alertes e-mail.
 
 ## CV et lettre
 
-Claude rédige le contenu à partir de vos CV, de votre profil et de vos règles de rédaction (Réglages, partie CV et lettre). La mise en page vient du modèle intégré d'ORBIT : une page, une colonne et des titres standards, que les logiciels de tri des recruteurs lisent bien.
+L'IA rédige le contenu à partir de vos CV, de votre profil et de vos règles de rédaction (Réglages, partie CV et lettre). La mise en page vient du modèle intégré d'ORBIT : une page, une colonne et des titres standards, que les logiciels de tri des recruteurs lisent bien.
 
 Les fichiers sont rangés dans `Applications/<Entreprise>/<Poste>/`. Une nouvelle version ne remplace jamais l'ancienne (suffixe `_v2`, `_v3`). Rien n'est inventé : un mot-clé de l'offre absent de votre parcours est signalé comme une lacune.
 
@@ -110,7 +120,7 @@ Le mot de passe est chiffré avec la protection Windows de votre session (DPAPI)
 | --- | --- |
 | `data/orbit.db` | La base SQLite, avec vos réglages et votre profil |
 | `data/backups/` | Une sauvegarde à chaque démarrage (les 30 dernières) et les sauvegardes manuelles |
-| `data/secrets.json` | Le mot de passe Gmail chiffré |
+| `data/secrets.json` | Le mot de passe Gmail, la clé d'API et la connexion ChatGPT, chiffrés |
 | `data/logs/` | Les journaux, sans mot de passe ni contenu de message |
 | `Applications/` | Un dossier par candidature, avec les CV et les lettres |
 
@@ -142,7 +152,7 @@ npm run build
 - `server/domain/` : règles des offres, candidatures et historique
 - `server/services/` : documents, import, dossiers, exports, CV et lettres
 - `server/mail/` : Gmail en lecture seule et alertes d'offres
-- `server/ai/` : Claude Code, outils et modes
+- `server/ai/` : services d'IA (Claude Code, ChatGPT, clés d'API), outils et modes
 - `web/` : interface React
 - `tests/` : règles métier et tests d'acceptation, avec Claude, Gmail et pages web simulés
 
