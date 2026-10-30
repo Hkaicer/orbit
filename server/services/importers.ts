@@ -172,7 +172,12 @@ export function importFolderTracking(db: Database, csvPath: string): ImportRepor
     report.applicationsCreated++;
     // A status written in the tracking file is the user's own statement: kept as confirmed proof.
     if (status !== "prepared") {
-      const ev = proposeStatus(db, app.id, { kind: "import", excerpt: `Statut « ${row["Statut"]} » dans SUIVI_CANDIDATURES.csv${row["Date envoi"] ? `, envoi le ${row["Date envoi"]}` : ""}`, suggests: status }, "import");
+      const ev = proposeStatus(
+        db,
+        app.id,
+        { kind: "import", excerpt: `Statut « ${row["Statut"]} » dans SUIVI_CANDIDATURES.csv${row["Date envoi"] ? `, envoi le ${row["Date envoi"]}` : ""}`, suggests: status },
+        "import",
+      );
       confirmEvidence(db, ev.id, { actor: "import" });
       if (status === "sent" && frDate(row["Date envoi"])) db.run("UPDATE applications SET sent_at = ? WHERE id = ?", frDate(row["Date envoi"]), app.id);
     }
@@ -265,6 +270,10 @@ export function importTrackingTable(db: Database, csvPath: string, findCv: (name
 /** Imports one tracking file, in the format its columns show. */
 export function importTrackingFile(db: Database, csvPath: string, findCv: (name: string) => string | null): ImportReport {
   if (!fs.existsSync(csvPath)) return { file: csvPath, missing: true, offersCreated: 0, offersKnown: 0, applicationsCreated: 0, skipped: [] };
-  const header = fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
+  const header =
+    fs
+      .readFileSync(csvPath, "utf8")
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/, 1)[0] ?? "";
   return /Date decouverte|ID candidature/i.test(header) ? importTrackingTable(db, csvPath, findCv) : importFolderTracking(db, csvPath);
 }

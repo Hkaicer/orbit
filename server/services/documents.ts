@@ -16,8 +16,6 @@ import type { Database } from "../db/database";
 import { AppError, newId } from "../errors";
 import { log } from "../logger";
 
-
-
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "__pycache__", ".venv", "venv", ".cache"]);
 const TEXT_EXT = new Set([".md", ".txt", ".csv", ".js"]);
 const KEEP_EXT = new Set([".docx", ".pdf", ".md", ".txt", ".csv", ".js"]);
@@ -91,8 +89,11 @@ async function pdfTexts(files: string[]): Promise<Map<string, string>> {
   if (files.length === 0) return out;
   try {
     const stdout = await new Promise<string>((resolve, reject) => {
-      const child = execFile("python", ["-I", "-c", PDF_SCRIPT], { timeout: 180_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, encoding: "utf8", env: { ...process.env, PYTHONIOENCODING: "utf-8" } }, (err, so) =>
-        err ? reject(err) : resolve(so),
+      const child = execFile(
+        "python",
+        ["-I", "-c", PDF_SCRIPT],
+        { timeout: 180_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, encoding: "utf8", env: { ...process.env, PYTHONIOENCODING: "utf-8" } },
+        (err, so) => (err ? reject(err) : resolve(so)),
       );
       child.stdin?.end(JSON.stringify(files));
     });
@@ -152,8 +153,17 @@ function languageOf(name: string, text: string | null): string | null {
 function companyOfFolder(dir: string): string | null {
   const offre = path.join(dir, "OFFRE.md");
   try {
-    const first = fs.readFileSync(offre, "utf8").replace(/^﻿/, "").split(/\r?\n/).find((l) => l.startsWith("# "));
-    return first ? first.slice(2).split(/\s+[—–-]\s+/)[0]!.trim() : null;
+    const first = fs
+      .readFileSync(offre, "utf8")
+      .replace(/^﻿/, "")
+      .split(/\r?\n/)
+      .find((l) => l.startsWith("# "));
+    return first
+      ? first
+          .slice(2)
+          .split(/\s+[—–-]\s+/)[0]!
+          .trim()
+      : null;
   } catch {
     return null;
   }
@@ -214,12 +224,39 @@ export async function indexDocuments(db: Database, roots: string[], privatePatte
         if (known) {
           db.run(
             "UPDATE documents SET root=?, name=?, ext=?, kind=?, family=?, language=?, company=?, size=?, mtime=?, sha256=?, text=?, private=?, indexed_at=? WHERE path=?",
-            row.root, row.name, row.ext, row.kind, row.family, row.language, row.company, row.size, row.mtime, row.sha, text, isPrivate ? 1 : 0, now.toISOString(), file,
+            row.root,
+            row.name,
+            row.ext,
+            row.kind,
+            row.family,
+            row.language,
+            row.company,
+            row.size,
+            row.mtime,
+            row.sha,
+            text,
+            isPrivate ? 1 : 0,
+            now.toISOString(),
+            file,
           );
         } else {
           db.run(
             "INSERT INTO documents (id, path, root, name, ext, kind, family, language, company, size, mtime, sha256, text, private, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            newId("doc"), file, row.root, row.name, row.ext, row.kind, row.family, row.language, row.company, row.size, row.mtime, row.sha, text, isPrivate ? 1 : 0, now.toISOString(),
+            newId("doc"),
+            file,
+            row.root,
+            row.name,
+            row.ext,
+            row.kind,
+            row.family,
+            row.language,
+            row.company,
+            row.size,
+            row.mtime,
+            row.sha,
+            text,
+            isPrivate ? 1 : 0,
+            now.toISOString(),
           );
         }
         result.indexed++;

@@ -2,7 +2,7 @@
 // request run with ORBIT's tools. Claude Code (Claude plan), ChatGPT (ChatGPT
 // plan) and an API key (Anthropic or OpenAI) each implement it.
 
-import type { ConnectorInfo, RunnerStatus } from "../../shared/types";
+import type { ChatImage, ConnectorInfo, RunnerStatus } from "../../shared/types";
 import type { RunContext } from "./tools";
 
 export class AssistantError extends Error {
@@ -27,6 +27,8 @@ export interface RunRequest {
   onEvent: (e: { type: "text"; delta: string } | { type: "status"; text: string }) => void;
   /** claude.ai connectors allowed for this request (Claude Code only), e.g. mcp__claude_ai_Indeed. */
   connectors?: string[];
+  /** Images the user attached to this request (screenshots, photos). */
+  images?: ChatImage[];
   /** The request's tools, for the services ORBIT calls itself (Claude Code reaches them through the MCP bridge). */
   run?: RunContext;
 }

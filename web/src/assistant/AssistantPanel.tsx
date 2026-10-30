@@ -1,6 +1,6 @@
 import { MODE_LABELS, MODEL_LABELS, REASONING_LABELS, type AiStatus, type AssistantTask, type ChatMessage, type ModelChoice, type Proposal, type RequestMode } from "@shared/types";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Check, ChevronDown, CircleStop, Download, FolderOpen, ListChecks, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, CircleStop, Download, FolderOpen, ImagePlus, ListChecks, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAction } from "../components/bits";
 import { Button, IconButton, Menu, Segmented, Spinner, confirmAction } from "../components/ui";
@@ -8,6 +8,7 @@ import { api, downloadUrl, streamChat } from "../lib/api";
 import { Markdown } from "../lib/markdown";
 import { refreshAll, useAiStatus, useConversation, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
+import { MAX_IMAGES, prepareImage, type Attached } from "../lib/images";
 import { toast } from "../lib/toast";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -23,6 +24,9 @@ const TOOL_LABELS: Record<string, string> = {
   search_tracked_mails: "Recherche dans les e-mails suivis",
   search_gmail: "Recherche dans Gmail",
   read_gmail: "Lecture d'un e-mail",
+  email_links: "Lecture des liens d'un e-mail",
+  open_link: "Ouverture d'un lien",
+  set_theme: "Changement du thème",
   create_offer: "Création de la fiche",
   save_analysis: "Enregistrement de l'analyse",
   set_offer_status: "Classement de l'offre",
@@ -40,6 +44,10 @@ const TOOL_LABELS: Record<string, string> = {
   generate_documents: "Création du CV et de la lettre",
   choose_mode: "Choix du mode",
   save_profile: "Enregistrement du profil",
+  list_search_sources: "Lecture des sources de recherche",
+  search_jobs: "Recherche d'offres sur les sites",
+  add_search_results: "Ajout des offres retenues",
+  add_search_company: "Ajout d'une entreprise à suivre",
 };
 
 const MODE_HINTS: Record<RequestMode, string> = {
@@ -63,6 +71,7 @@ const MODEL_HINTS: Record<ModelChoice, string> = {
 
 const TASK_LABELS: Record<AssistantTask, string> = {
   discovery: "Découverte : lis mes CV et mes lettres et crée mon profil.",
+  mail_review: "Trie mes e-mails de recrutement : à quelle candidature va chacun, et quel statut il indique.",
 };
 
 const SUGGESTIONS = [
@@ -74,6 +83,7 @@ const SUGGESTIONS = [
 
 interface Streaming {
   userText: string;
+  images: string[];
   status: string | null;
   tools: { name: string; ok: boolean }[];
   text: string;
@@ -86,6 +96,9 @@ export function AssistantPanel() {
   const settings = useSettings();
   const convo = useConversation();
   const [input, setInput] = useState("");
+  const [images, setImages] = useState<Attached[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -127,21 +140,42 @@ export function AssistantPanel() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages.length, streaming?.text, streaming?.tools.length]);
 
-  const send = async (text: string, task?: AssistantTask) => {
-    const message = text.trim();
-    if (!message || busy || !ready) return;
-    if (!task) setInput("");
-    if (inputRef.current) inputRef.current.style.height = "auto";
-    setStreaming({ userText: message, status: null, tools: [], text: "" });
+  /** Images pasted, dropped or chosen: reduced, then shown above the text until the message is sent. */
+  const attach = async (files: File[]) => {
+    const pictures = files.filter((f) => f.type.startsWith("image/"));
+    if (!pictures.length) return;
+    const room = MAX_IMAGES - images.length;
+    if (pictures.length > room) toast.error(`${MAX_IMAGES} images au plus par message.`);
     try {
-      await streamChat({ message, mode, model, ...(task ? { task } : {}) }, (e) => {
+      const prepared = await Promise.all(pictures.slice(0, Math.max(0, room)).map(prepareImage));
+      setImages((cur) => [...cur, ...prepared].slice(0, MAX_IMAGES));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Cette image n'a pas pu être lue.");
+    }
+  };
+
+  const send = async (text: string, task?: AssistantTask) => {
+    const sent = task ? [] : images;
+    const message = text.trim() || (sent.length ? "Voici une image." : "");
+    if (!message || busy || !ready) return;
+    if (!task) {
+      setInput("");
+      setImages([]);
+    }
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    setStreaming({ userText: message, images: sent.map((i) => i.preview), status: null, tools: [], text: "" });
+    try {
+      await streamChat({ message, mode, model, ...(task ? { task } : {}), ...(sent.length ? { images: sent.map(({ mediaType, data }) => ({ mediaType, data })) } : {}) }, (e) => {
         if (e.type === "status") setStreaming((s) => s && { ...s, status: e.text });
         else if (e.type === "tool") setStreaming((s) => s && { ...s, tools: [...s.tools, { name: e.name, ok: e.ok }] });
         else if (e.type === "text") setStreaming((s) => s && { ...s, text: s.text + e.delta });
         else if (e.type === "done" && e.proposal) toast.show({ message: "Des changements attendent votre validation." });
         else if (e.type === "fatal") {
           toast.error(e.message);
-          if (!task) setInput(message);
+          if (!task) {
+            setInput(text);
+            setImages(sent);
+          }
         }
       });
     } finally {
@@ -211,7 +245,33 @@ export function AssistantPanel() {
 
       {status.data && !ready && <NotReady status={status.data} />}
       <div className="composer">
-        <div className={`composer-box ${!ready ? "is-disabled" : ""}`}>
+        <div
+          className={`composer-box ${!ready ? "is-disabled" : ""} ${dragging ? "is-dragging" : ""}`}
+          onDragOver={(e) => {
+            if (!ready || !e.dataTransfer.types.includes("Files")) return;
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            setDragging(false);
+            if (!ready || !e.dataTransfer.files.length) return;
+            e.preventDefault();
+            void attach([...e.dataTransfer.files]);
+          }}
+        >
+          {images.length > 0 && (
+            <ul className="composer-images" aria-label="Images jointes">
+              {images.map((img, i) => (
+                <li key={i} className="composer-image">
+                  <img src={img.preview} alt={img.name} />
+                  <button type="button" className="composer-image-remove" aria-label={`Retirer ${img.name}`} onClick={() => setImages((cur) => cur.filter((_, j) => j !== i))}>
+                    <X />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <textarea
             ref={inputRef}
             value={input}
@@ -220,6 +280,13 @@ export function AssistantPanel() {
             aria-label="Votre demande"
             disabled={!ready}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+              if (files.length) {
+                e.preventDefault();
+                void attach(files);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
@@ -233,6 +300,20 @@ export function AssistantPanel() {
             }}
           />
           <div className="composer-tools">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              multiple
+              hidden
+              onChange={(e) => {
+                void attach([...(e.target.files ?? [])]);
+                e.target.value = "";
+              }}
+            />
+            <IconButton label="Joindre une image (ou collez-la, ou déposez-la ici)" disabled={!ready || busy || images.length >= MAX_IMAGES} onClick={() => fileRef.current?.click()}>
+              <ImagePlus />
+            </IconButton>
             <Menu
               label="Modèle de cette demande"
               items={[
@@ -257,13 +338,15 @@ export function AssistantPanel() {
                 Arrêter
               </Button>
             ) : (
-              <button type="button" className="send-btn" aria-label="Envoyer" disabled={!ready || !input.trim()} onClick={() => void send(input)}>
+              <button type="button" className="send-btn" aria-label="Envoyer" disabled={!ready || (!input.trim() && !images.length)} onClick={() => void send(input)}>
                 <ArrowUp />
               </button>
             )}
           </div>
         </div>
-        <div className="composer-hint">Entrée pour envoyer, Maj+Entrée pour aller à la ligne. L'IA ne reçoit que ce qu'elle consulte, jamais les documents privés.</div>
+        <div className="composer-hint">
+          Entrée pour envoyer, Maj+Entrée pour aller à la ligne. Collez ou déposez une image pour la joindre. L'IA ne reçoit que ce qu'elle consulte, jamais les documents privés.
+        </div>
       </div>
     </aside>
   );
@@ -307,13 +390,30 @@ function NotReady({ status }: { status: AiStatus }) {
   );
 }
 
+/** The images of a message, opened full size in a new tab on click. */
+function MessageImages({ sources }: { sources: string[] }) {
+  if (!sources.length) return null;
+  return (
+    <span className="msg-images">
+      {sources.map((src, i) => (
+        <a key={i} href={src} target="_blank" rel="noreferrer" className="msg-image">
+          <img src={src} alt={`Image jointe ${i + 1}`} />
+        </a>
+      ))}
+    </span>
+  );
+}
+
 function StreamingView({ s }: { s: Streaming }) {
   const last = s.tools[s.tools.length - 1];
   const failed = s.tools.filter((t) => !t.ok).length;
   return (
     <>
       <div className="msg msg-user">
-        <div className="msg-bubble">{s.userText}</div>
+        <div className="msg-bubble">
+          <MessageImages sources={s.images} />
+          {s.userText}
+        </div>
       </div>
       <div className="msg msg-assistant is-streaming">
         {s.text ? <Markdown text={s.text} /> : null}
@@ -336,7 +436,10 @@ function MessageView({ message: m, proposal }: { message: ChatMessage; proposal?
   if (m.role === "user") {
     return (
       <div className="msg msg-user">
-        <div className="msg-bubble">{m.content}</div>
+        <div className="msg-bubble">
+          <MessageImages sources={(m.meta.images ?? []).map((i) => `/api/ai/images/${i.file}`)} />
+          {m.content}
+        </div>
       </div>
     );
   }

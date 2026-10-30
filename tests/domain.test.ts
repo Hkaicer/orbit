@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { Database } from "../server/db/database";
-import { addDeadline, confirmEvidence, createApplication, decideExternalAction, getApplicationDetail, proposeStatus, requestExternalAction, setDeadlineStatus, setStatus } from "../server/domain/applications";
+import {
+  addDeadline,
+  confirmEvidence,
+  createApplication,
+  decideExternalAction,
+  getApplicationDetail,
+  proposeStatus,
+  requestExternalAction,
+  setDeadlineStatus,
+  setStatus,
+} from "../server/domain/applications";
 import { createOffer, dedupKey, normalize, resolveSimilar, titleSimilarity, urlKey } from "../server/domain/offers";
 
 const db = () => {
@@ -67,7 +77,12 @@ describe("application statuses", () => {
     expect(() => setDeadlineStatus(d, test.id, "done", "agent")).toThrow(/Seul vous/);
     expect(setDeadlineStatus(d, test.id, "done", "user").status).toBe("done");
 
-    const action = requestExternalAction(d, app.id, { kind: "Envoi de candidature", description: "Déposer le CV CV_Martin_Wavestone.pdf sur le site carrières de Wavestone pour le poste IA et cybersécurité." }, "agent");
+    const action = requestExternalAction(
+      d,
+      app.id,
+      { kind: "Envoi de candidature", description: "Déposer le CV CV_Martin_Wavestone.pdf sur le site carrières de Wavestone pour le poste IA et cybersécurité." },
+      "agent",
+    );
     expect(action.status).toBe("pending");
     expect(() => decideExternalAction(d, action.id, "done")).toThrow(/Validez/);
     expect(decideExternalAction(d, action.id, "approved").status).toBe("approved");

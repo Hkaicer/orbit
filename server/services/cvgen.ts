@@ -96,7 +96,8 @@ function runWorker<T>(input: object, timeoutMs = 240_000): Promise<T> {
 /** The user's own CV generator, or null for the built-in template. */
 function generatorOf(settings: Settings): string | null {
   if (!settings.cvGenerator.trim()) return null;
-  if (!fs.existsSync(settings.cvGenerator)) throw new AppError("unavailable", `Générateur de CV introuvable : ${settings.cvGenerator}. Vérifiez son chemin dans les Réglages, ou videz-le pour le modèle intégré.`);
+  if (!fs.existsSync(settings.cvGenerator))
+    throw new AppError("unavailable", `Générateur de CV introuvable : ${settings.cvGenerator}. Vérifiez son chemin dans les Réglages, ou videz-le pour le modèle intégré.`);
   return settings.cvGenerator;
 }
 

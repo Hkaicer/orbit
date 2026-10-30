@@ -67,6 +67,8 @@ export function cliEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.
   env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
   env.DISABLE_AUTOUPDATER = "1";
   env.MCP_TIMEOUT = "15000";
+  // A job search reads many sites, LinkedIn slowly: its tool call may take a few minutes.
+  env.MCP_TOOL_TIMEOUT = "300000";
   // Wait for the MCP servers (ORBIT's own, and an allowed claude.ai connector) before the first turn:
   // otherwise Claude may start before they are connected and not see their tools.
   env.MCP_CONNECTION_NONBLOCKING = "false";
@@ -224,6 +226,7 @@ export class ClaudeCli implements AssistantRunner {
     fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: { orbit: { type: "http", url: this.mcpUrl(req.token) } } }), "utf8");
     const args = [
       "-p",
+      ...(req.images?.length ? ["--input-format", "stream-json"] : []),
       "--output-format",
       "stream-json",
       "--verbose",
@@ -341,7 +344,16 @@ export class ClaudeCli implements AssistantRunner {
         finish(() => reject(err));
       });
       child.stdin.on("error", () => undefined);
-      child.stdin.end(req.prompt, "utf8");
+      const images = req.images ?? [];
+      child.stdin.end(
+        images.length
+          ? JSON.stringify({
+              type: "user",
+              message: { role: "user", content: [{ type: "text", text: req.prompt }, ...images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } }))] },
+            }) + "\n"
+          : req.prompt,
+        "utf8",
+      );
     });
   }
 }

@@ -2,7 +2,9 @@
 // and in mode A the proposal of the prepared changes. One request at a time.
 
 import { randomBytes } from "node:crypto";
-import type { AssistantTask, ChatMessage, ModelChoice, Proposal, RequestMode, StreamEvent } from "../../shared/types";
+import fs from "node:fs";
+import path from "node:path";
+import type { AssistantTask, ChatImage, ChatMessage, ModelChoice, Proposal, RequestMode, StreamEvent } from "../../shared/types";
 import type { Database } from "../db/database";
 import { addEvent } from "../domain/history";
 import { AppError, newId } from "../errors";
@@ -66,15 +68,24 @@ export class Agent {
     return this.active !== null;
   }
 
-  async chat(input: { message: string; mode?: RequestMode; model?: ModelChoice; task?: AssistantTask }, emit: (e: StreamEvent) => void): Promise<void> {
-    const text = input.task ? TASK_MESSAGES[input.task] : input.message.trim();
+  async chat(input: { message: string; mode?: RequestMode; model?: ModelChoice; task?: AssistantTask; images?: ChatImage[] }, emit: (e: StreamEvent) => void): Promise<void> {
+    const images = input.task ? [] : (input.images ?? []);
+    const text = input.task ? TASK_MESSAGES[input.task] : input.message.trim() || (images.length ? "Voici une image." : "");
     if (!text) throw new AppError("validation", "Écrivez un message.");
     if (text.length > 60_000) throw new AppError("validation", "Message trop long (60 000 caractères au plus).");
     if (this.active) throw new AppError("conflict", "ORBIT traite encore la demande précédente.");
     const settings = loadSettings(this.db);
     // Discovery writes the profile at once on a new install (or when there is none), and only prepares it otherwise.
     const fresh = !this.db.get("SELECT 1 AS x FROM offers LIMIT 1") && !this.db.get("SELECT 1 AS x FROM applications LIMIT 1");
-    const asked = input.task === "discovery" ? (fresh || settings.profile.trim().length < 50 || settings.profile === DEFAULT_PROFILE ? "B" : "A") : (input.mode ?? settings.defaultMode);
+    // Sorting the emails only records proposals for the user: no mode to choose.
+    const asked =
+      input.task === "discovery"
+        ? fresh || settings.profile.trim().length < 50 || settings.profile === DEFAULT_PROFILE
+          ? "B"
+          : "A"
+        : input.task === "mail_review"
+          ? "B"
+          : (input.mode ?? settings.defaultMode);
     const auto = asked === "auto";
     // In auto, nothing local is done before Claude picks the mode: until then, changes are only prepared (A).
     const mode = auto ? "A" : asked;
@@ -83,7 +94,8 @@ export class Agent {
     this.active = controller;
     const started = Date.now();
     const history = conversation(this.db).messages;
-    const user = addMessage(this.db, "user", text, auto ? { auto } : { mode });
+    const saved = this.saveImages(images);
+    const user = addMessage(this.db, "user", text, { ...(auto ? { auto } : { mode }), ...(saved.length ? { images: saved } : {}) });
     emit({ type: "accepted", message: user });
     const rc: RunContext = {
       token: randomBytes(24).toString("hex"),
@@ -105,7 +117,15 @@ export class Agent {
       picked = provider;
       const result = await runner.run({
         system: SYSTEM_PROMPT,
-        prompt: buildPrompt(text, asked, input.task ? [] : history, settings, new Date(), input.task),
+        prompt: buildPrompt(
+          images.length ? `${text}\n\n(${images.length} image${images.length > 1 ? "s" : ""} jointe${images.length > 1 ? "s" : ""} à ce message.)` : text,
+          asked,
+          input.task ? [] : history,
+          settings,
+          new Date(),
+          input.task,
+        ),
+        images,
         model,
         effort: settings.effort,
         token: rc.token,
@@ -129,7 +149,7 @@ export class Agent {
         model: result.model ?? model,
         provider,
         status: "ok",
-        tools: rc.calls.map((c) => ({ name: c.name, ok: c.ok })),
+        tools: rc.calls.map((c) => ({ name: c.name, ok: c.ok, ...(c.error ? { error: c.error.slice(0, 300) } : {}) })),
         durationMs: Date.now() - started,
         ...(proposal ? { proposalId: proposal.id } : {}),
         ...(rc.files.length ? { files: rc.files } : {}),
@@ -147,7 +167,7 @@ export class Agent {
           ...(auto ? { auto } : {}),
           ...(picked ? { provider: picked } : {}),
           status: "error",
-          tools: rc.calls.map((c) => ({ name: c.name, ok: c.ok })),
+          tools: rc.calls.map((c) => ({ name: c.name, ok: c.ok, ...(c.error ? { error: c.error.slice(0, 300) } : {}) })),
           durationMs: Date.now() - started,
         }),
       });
@@ -186,7 +206,31 @@ export class Agent {
     addEvent(this.db, { actor: "user", kind: "validation", summary: "Proposition écartée (mode A)" });
   }
 
+  /** The folder of the attached images. */
+  private get uploads() {
+    return path.join(this.deps().config.dataDir, "uploads");
+  }
+
+  private saveImages(images: ChatImage[]): { file: string; mediaType: string }[] {
+    if (!images.length) return [];
+    fs.mkdirSync(this.uploads, { recursive: true });
+    const ext: Record<ChatImage["mediaType"], string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+    return images.map((i) => {
+      const file = `${newId("img")}.${ext[i.mediaType]}`;
+      fs.writeFileSync(path.join(this.uploads, file), Buffer.from(i.data, "base64"));
+      return { file, mediaType: i.mediaType };
+    });
+  }
+
+  /** An attached image, by its file name only. */
+  imagePath(file: string): string | null {
+    if (!/^img_[a-z0-9]+\.(png|jpg|webp|gif)$/i.test(file)) return null;
+    const p = path.join(this.uploads, file);
+    return fs.existsSync(p) ? p : null;
+  }
+
   clear() {
     this.db.run("DELETE FROM messages");
+    fs.rmSync(this.uploads, { recursive: true, force: true });
   }
 }

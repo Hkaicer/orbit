@@ -12,6 +12,7 @@ import type { SecretStore } from "../secrets";
 import { ALERT_QUERY, alertSource, inSearch, parseAlert, type AlertJob } from "./alerts";
 import { ATS_SENDERS, categorize, findDeadline, mailText, matchApplication, SUGGESTS, type Candidate } from "./classify";
 import { dpapi, type Protector } from "./dpapi";
+import { emailLinks } from "../services/openLink";
 import { GmailReader, MailError, type MailReader, type RawMail } from "./imap";
 
 export type MakeReader = (account: { email: string; password: string }) => MailReader;
@@ -274,6 +275,14 @@ export class Mailbox {
       subject: m.subject,
       snippet: cleanForAi(mailText(m), 300),
     }));
+  }
+
+  /** The links of one email, to open the useful one (a test result, an offer). Links that act are flagged. */
+  async links(id: string): Promise<{ id: string; subject: string; links: { n: number; text: string; url: string; acts: boolean }[] } | null> {
+    const { reader } = await this.reader();
+    const [m] = await reader.read([id], { html: true });
+    if (!m) return null;
+    return { id: m.id, subject: m.subject, links: emailLinks(m.html, m.text).map((l, i) => ({ n: i + 1, ...l })) };
   }
 
   /** One email's text for reading, links and addresses removed. */

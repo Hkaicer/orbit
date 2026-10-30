@@ -183,6 +183,30 @@ export const MIGRATIONS: Migration[] = [
     // 1 once an email of an alert sender has been read for the jobs it lists.
     up: "ALTER TABLE mails ADD COLUMN alert_checked INTEGER NOT NULL DEFAULT 0;",
   },
+  {
+    version: 3,
+    name: "mail reviews",
+    // What the assistant read in an email, waiting for the user (one per email).
+    // skipped: nothing to do (a newsletter), kept so the email is not read again.
+    up: `
+      CREATE TABLE mail_reviews (
+        id TEXT PRIMARY KEY,
+        mail_id TEXT NOT NULL REFERENCES mails(id) ON DELETE CASCADE,
+        state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','accepted','dismissed','skipped')),
+        application_id TEXT REFERENCES applications(id) ON DELETE SET NULL,
+        company TEXT,
+        title TEXT,
+        location TEXT,
+        url TEXT,
+        status TEXT,
+        due_at TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        resolved_at TEXT
+      );
+      CREATE UNIQUE INDEX idx_mail_reviews_mail ON mail_reviews(mail_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database) {

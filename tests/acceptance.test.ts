@@ -577,7 +577,14 @@ describe("CV and cover letter", () => {
     const content = {
       headline: "Analyste SOC  ·  Stage de fin d'études",
       profile: "Élève ingénieur en cybersécurité, avec un projet de détection en **SOC** et une pratique de **Splunk**.",
-      experiences: [{ role: "Analyste SOC (stage)", org: "Acme Telecom, Lyon", date: "Février à juillet 2026", bullets: ["Analyse et tri des alertes **SIEM**.", "Règles de détection alignées sur **MITRE ATT&CK**."] }],
+      experiences: [
+        {
+          role: "Analyste SOC (stage)",
+          org: "Acme Telecom, Lyon",
+          date: "Février à juillet 2026",
+          bullets: ["Analyse et tri des alertes **SIEM**.", "Règles de détection alignées sur **MITRE ATT&CK**."],
+        },
+      ],
       education: [{ degree: "Diplôme d'ingénieur", school: "École d'ingénieurs", date: "2023 à 2026" }],
       skills: [{ label: "Détection", value: "Splunk, Sysmon, Wazuh, Python" }],
       languages: "Français (langue maternelle)  ·  Anglais (C1)",
@@ -782,6 +789,22 @@ describe("assistant: auto mode, model, discovery, connectors", () => {
       { name: "Figma", prefix: "mcp__claude_ai_Figma", status: "needs_auth" },
     ]);
     expect(connectorPrefix("Google Drive")).toBe("mcp__claude_ai_Google_Drive");
+  });
+
+  it("changing one setting keeps every other one, and an unreadable field never erases the rest", async () => {
+    const { h } = await boot();
+    const mine = { profile: "- Formation : École d'ingénieurs.\n- Orientations : SOC, GRC.", alertExclude: ["senior"], alertKeywords: ["cyber"], model: "opus" as const };
+    saveSettings(h.db, mine);
+    const before = (await api(h, "GET", "/api/settings")).json();
+    // A switch, the theme, the end of the welcome screen: each sends one field only.
+    for (const patch of [{ theme: "dark" }, { setupDone: true }, { indeedConnector: false }]) expect((await api(h, "PATCH", "/api/settings", patch)).status).toBe(200);
+    const after = (await api(h, "GET", "/api/settings")).json();
+    expect(after).toMatchObject({ ...mine, contact: before.contact, documentRoots: before.documentRoots, theme: "dark", setupDone: true, indeedConnector: false });
+
+    // A stored value that no longer fits (an older or a hand-edited file) only loses that value.
+    const row = JSON.parse(h.db.get<{ data: string }>("SELECT data FROM settings WHERE id = 1")!.data);
+    h.db.run("UPDATE settings SET data = ? WHERE id = 1", JSON.stringify({ ...row, model: "gpt-9" }));
+    expect((await api(h, "GET", "/api/settings")).json()).toMatchObject({ ...mine, model: "sonnet", contact: before.contact });
   });
 
   it("shows the welcome screen only on a new install", async () => {

@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import type { Database } from "../db/database";
+import { log } from "../logger";
 
 export const DEFAULT_PROFILE = `Profil de référence (à remplir, ou à confier à la Découverte par l'IA dans Réglages, partie Profil). Les CV font foi.
 - Formation : à compléter (diplômes, écoles, années).
@@ -39,6 +40,29 @@ Lettre
 - Phrases fluides, pas de tiret cadratin, pas de cliché (« passionné », « environnement stimulant », « relever des défis »).
 - Une rencontre avec l'entreprise n'est citée que si elle est réelle et écrite dans le profil.
 - Une lettre déjà validée n'est jamais remplacée : une nouvelle version est un nouveau fichier.`;
+
+/** A company followed through its career site (see search/collectors.ts). */
+export const zCompanySource = z.object({
+  type: z.enum(["greenhouse", "lever", "ashby", "smartrecruiters", "workday", "yello"]),
+  company: z.string().min(1).max(120),
+  slug: z.string().max(120).optional(),
+  host: z.string().max(200).optional(),
+  tenant: z.string().max(120).optional(),
+  site: z.string().max(120).optional(),
+  eu: z.boolean().optional(),
+  active: z.boolean().default(true),
+});
+
+/** Companies followed at first, all checked: each one can be turned off or removed. */
+export const DEFAULT_COMPANIES: z.input<typeof zCompanySource>[] = [
+  { type: "greenhouse", company: "Cloudflare", slug: "cloudflare" },
+  { type: "greenhouse", company: "Datadog", slug: "datadog" },
+  { type: "lever", company: "Palantir", slug: "palantir" },
+  { type: "ashby", company: "OpenAI", slug: "openai" },
+  { type: "smartrecruiters", company: "Roland Berger", slug: "rolandberger" },
+  { type: "workday", company: "CrowdStrike", host: "crowdstrike.wd5.myworkdayjobs.com", tenant: "crowdstrike", site: "crowdstrikecareers" },
+  { type: "workday", company: "Airbus", host: "ag.wd3.myworkdayjobs.com", tenant: "ag", site: "Airbus" },
+];
 
 export const zContact = z.object({
   name: z.string().max(100),
@@ -85,6 +109,25 @@ export const zSettings = z.object({
   alertExclude: z.array(z.string().max(60)).max(100).default([]),
   mailLookbackDays: z.number().int().min(7).max(400).default(120),
   followupAfterDays: z.number().int().min(3).max(60).default(14),
+  /** The sites the assistant searches when asked to find offers. All are on at first. */
+  searchBoards: z
+    .object({
+      linkedin: z.boolean().default(true),
+      wttj: z.boolean().default(true),
+      hellowork: z.boolean().default(true),
+      france_travail: z.boolean().default(true),
+      adzuna: z.boolean().default(true),
+      remotive: z.boolean().default(true),
+      arbeitnow: z.boolean().default(true),
+      remoteok: z.boolean().default(true),
+    })
+    .prefault({}),
+  searchCompanies: z.array(zCompanySource).max(300).prefault(DEFAULT_COMPANIES),
+  /** The country of Adzuna's offers (fr, be, ch, gb, de...). */
+  adzunaCountry: z
+    .string()
+    .regex(/^[a-z]{2}$/)
+    .default("fr"),
   /** Light, dark, or the theme of the system. */
   theme: z.enum(["system", "light", "dark"]).default("system"),
   /** The first start is over (welcome screen done or skipped). */
@@ -94,16 +137,30 @@ export const zSettings = z.object({
 });
 
 export type Settings = z.infer<typeof zSettings>;
-export const zSettingsPatch = zSettings.partial();
+const withoutDefault = (t: z.ZodType): z.ZodType => (t instanceof z.ZodDefault || t instanceof z.ZodPrefault ? (t.unwrap() as z.ZodType) : t);
+
+/**
+ * A change to some settings. Not zSettings.partial(): with Zod 4 a missing
+ * field would get its default value, and saving the change would then replace
+ * every other setting by its default.
+ */
+export const zSettingsPatch = z.object(Object.fromEntries(Object.entries(zSettings.shape).map(([k, t]) => [k, withoutDefault(t as z.ZodType).optional()]))) as unknown as z.ZodType<Partial<Settings>>;
 
 export function loadSettings(db: Database): Settings {
   const row = db.get<{ data: string }>("SELECT data FROM settings WHERE id = 1");
-  const parsed = zSettings.safeParse(row ? JSON.parse(row.data) : {});
-  return parsed.success ? parsed.data : zSettings.parse({});
+  const stored = (row ? JSON.parse(row.data) : {}) as Record<string, unknown>;
+  const parsed = zSettings.safeParse(stored);
+  if (parsed.success) return parsed.data;
+  // A field that cannot be read gets its default value, never the others.
+  const shape = zSettings.shape as Record<string, z.ZodType>;
+  const readable = Object.fromEntries(Object.entries(stored).filter(([k, v]) => shape[k]?.safeParse(v).success));
+  log.warn("settings partly unreadable", { fields: [...new Set(parsed.error.issues.map((i) => String(i.path[0])))] });
+  return zSettings.parse(readable);
 }
 
 export function saveSettings(db: Database, patch: Partial<Settings>): Settings {
-  const next = zSettings.parse({ ...loadSettings(db), ...patch });
+  const given = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+  const next = zSettings.parse({ ...loadSettings(db), ...given });
   db.run("INSERT INTO settings (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data", JSON.stringify(next));
   return next;
 }

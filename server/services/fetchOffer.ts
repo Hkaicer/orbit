@@ -14,10 +14,25 @@ export type PageResult =
   | { ok: true; url: string; title: string | null; text: string; posting: Partial<OfferInput> | null }
   | { ok: false; reason: "invalid" | "blocked" | "not_found" | "network" | "empty"; message: string };
 
-const BLOCK_HOSTS = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|169\.254\.|\[?::1\]?$|.*\.local$|.*\.internal$)/i;
+export const BLOCK_HOSTS = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|169\.254\.|\[?::1\]?$|.*\.local$|.*\.internal$)/i;
 const LOGIN_ONLY = /(^|\.)(linkedin\.com|indeed\.(com|fr)|jobteaser\.com|glassdoor\.(com|fr))$/i;
 
-const ENTITIES: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", eacute: "é", egrave: "è", agrave: "à", ccedil: "ç", ecirc: "ê", rsquo: "’", laquo: "«", raquo: "»" };
+const ENTITIES: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  eacute: "é",
+  egrave: "è",
+  agrave: "à",
+  ccedil: "ç",
+  ecirc: "ê",
+  rsquo: "’",
+  laquo: "«",
+  raquo: "»",
+};
 
 export function htmlToText(html: string): string {
   return html
@@ -59,7 +74,15 @@ function locationOf(loc: unknown): string | null {
   const addr = first && typeof first === "object" ? ((first as Json).address as Json | string | undefined) : undefined;
   if (!addr) return null;
   if (typeof addr === "string") return addr;
-  return [str(addr.addressLocality), str(addr.postalCode) ? `(${str(addr.postalCode)})` : null, str(addr.addressCountry) && !/^(fr|france)$/i.test(String(addr.addressCountry)) ? str(addr.addressCountry) : null].filter(Boolean).join(" ") || null;
+  return (
+    [
+      str(addr.addressLocality),
+      str(addr.postalCode) ? `(${str(addr.postalCode)})` : null,
+      str(addr.addressCountry) && !/^(fr|france)$/i.test(String(addr.addressCountry)) ? str(addr.addressCountry) : null,
+    ]
+      .filter(Boolean)
+      .join(" ") || null
+  );
 }
 
 const CONTRACTS: Record<string, string> = { INTERN: "Stage", FULL_TIME: "CDI ou temps plein", PART_TIME: "Temps partiel", CONTRACTOR: "Prestataire", TEMPORARY: "CDD", OTHER: "Autre" };

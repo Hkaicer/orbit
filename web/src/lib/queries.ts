@@ -14,10 +14,12 @@ export const useApplication = (id: string | null) => useQuery({ queryKey: ["appl
 export const useDocuments = (f: { kind?: DocKind; q?: string } = {}) => useQuery({ queryKey: ["documents", f], queryFn: () => api.documents(f) });
 export const useMails = (f: { q?: string; unassigned?: boolean }) => useQuery({ queryKey: ["mails", f], queryFn: () => api.mails(f) });
 export const useGmail = () => useQuery({ queryKey: ["gmail"], queryFn: api.gmailStatus });
+export const useMailReviews = () => useQuery({ queryKey: ["mail-reviews"], queryFn: api.mailReviews });
 export const useHistory = (f: { applicationId?: string; offerId?: string; limit?: number } = {}) => useQuery({ queryKey: ["history", f], queryFn: () => api.history(f) });
 export const useBackups = () => useQuery({ queryKey: ["backups"], queryFn: api.backups });
 export const useAiStatus = () => useQuery({ queryKey: ["ai-status"], queryFn: () => api.aiStatus(), staleTime: 5 * 60_000, refetchOnWindowFocus: false });
 export const useConnectors = (enabled: boolean) => useQuery({ queryKey: ["connectors"], queryFn: () => api.connectors(), enabled, staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: false });
+export const useSearchSources = () => useQuery({ queryKey: ["search-sources"], queryFn: api.searchSources });
 export const useAiProviders = () => useQuery({ queryKey: ["ai-providers"], queryFn: api.aiProviders, staleTime: 30_000 });
 export const useConversation = () => useQuery({ queryKey: ["conversation"], queryFn: api.conversation });
 

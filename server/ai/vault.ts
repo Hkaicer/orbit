@@ -1,9 +1,11 @@
-// The AI secrets: an API key saved in Settings and the ChatGPT sign-in. They
-// are kept in the secrets file next to the database, encrypted like the Gmail
-// password (Windows DPAPI), and never go into the database, the backups, the
-// exports or the logs. Decrypted once, then read from memory.
+// The secrets of the assistant and of the job search: an API key, the ChatGPT
+// sign-in, the France Travail and Adzuna keys. They are kept in the secrets file
+// next to the database, encrypted like the Gmail password (Windows DPAPI), and
+// never go into the database, the backups, the exports or the logs. Decrypted
+// once, then read from memory.
 
 import type { ApiService } from "../../shared/types";
+import type { SearchKeys } from "../search/collectors";
 import { log } from "../logger";
 import type { Protector } from "../mail/dpapi";
 import type { SecretStore } from "../secrets";
@@ -31,6 +33,8 @@ export interface ChatGptRecord {
 export interface AiSecrets {
   apiKey?: { service: ApiService; key: string };
   chatgpt?: ChatGptRecord;
+  /** France Travail and Adzuna, for the job search. */
+  search?: SearchKeys;
 }
 
 export class AiVault {

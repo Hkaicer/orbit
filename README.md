@@ -16,7 +16,11 @@
 - **Candidatures** : treize statuts, vue par étapes ou en liste, prochaine action, tests, entretiens, échéances, notes et historique complet. Le statut se change d'un clic, depuis la liste des offres comme depuis celle des candidatures.
 - **CV et lettre adaptés** : collez une offre dans l'assistant et il crée la fiche, l'analyse, la candidature, puis un CV et une lettre adaptés en DOCX et en PDF. Les fichiers se téléchargent sous la réponse, et le bouton « Ouvrir le dossier » les montre dans l'Explorateur.
 - **Gmail en lecture seule** : accusés de réception, tests, entretiens, refus et offres sont repérés et rattachés aux candidatures. Un statut suggéré par un e-mail attend toujours votre confirmation.
+- **Tri des e-mails par l'assistant** : le bouton « Trier avec l'assistant » de la page Gmail lui fait lire les e-mails que les règles n'ont pas su placer. Pour chacun, il propose la candidature (ou une nouvelle offre, une nouvelle candidature) et le statut, par exemple un test à passer avec sa date. Vous modifiez chaque proposition, l'écartez, ou acceptez tout d'un clic. Un statut qui ferait reculer une candidature n'est jamais appliqué par « Tout accepter ».
+- **Résultats de tests** : l'assistant ouvre le lien d'un e-mail (par exemple « Voir mes résultats ») en lecture seule et résume vos scores. Une page faite en JavaScript est affichée par Edge ou Chrome, invisible, avec un profil vide supprimé aussitôt.
+- **Images** : joignez, collez ou déposez une capture d'écran ou une photo dans l'assistant (quatre au plus par message).
 - **Alertes d'offres** : les alertes e-mail de LinkedIn, Indeed, HelloWork, Welcome to the Jungle et APEC deviennent des fiches, filtrées par les mots de votre recherche.
+- **Recherche à la demande** : demandez à l'assistant de vous trouver des offres. Il pose d'abord ses questions, puis lit LinkedIn, Welcome to the Jungle et HelloWork (sans compte), France Travail, Adzuna, plusieurs sites d'offres ouverts et les sites carrières des entreprises suivies, et ajoute les 50 meilleures au plus, classées selon votre profil et jamais selon le lieu.
 - **Recherche Indeed** : avec le connecteur officiel Indeed de votre compte claude.ai, l'assistant cherche des offres et lit leur description.
 - **Performance** : offres trouvées, envois, taux et délai de réponse, étapes franchies, sources des offres.
 - **Documents** : vos dossiers de CV et de lettres sont lus sans jamais être modifiés. ORBIT repère les versions de référence, les versions adaptées et les copies identiques.
@@ -88,9 +92,28 @@ Le mode se choisit pour chaque demande :
 - **B** : les étapes locales (fiche, analyse, dossier) sont faites seules.
 - **C** : l'IA enchaîne le plus d'étapes possible.
 
-Dans tous les modes, un envoi ou un dépôt attend votre accord. Le modèle se change aussi pour chaque demande. Avec Claude : Haiku pour les questions simples, Sonnet pour le travail courant, Opus pour les CV, les lettres et les analyses fines. Avec un modèle OpenAI : Rapide, Équilibré ou Approfondi, selon la réflexion demandée.
+Dans tous les modes, un envoi ou un dépôt attend votre accord. L'assistant peut aussi lire vos e-mails (lecture seule), ouvrir le lien utile d'un e-mail (jamais un lien qui agit : se désinscrire, confirmer, accepter, se connecter), lire les images que vous joignez et changer le thème. Le modèle se change aussi pour chaque demande. Avec Claude : Haiku pour les questions simples, Sonnet pour le travail courant, Opus pour les CV, les lettres et les analyses fines. Avec un modèle OpenAI : Rapide, Équilibré ou Approfondi, selon la réflexion demandée.
 
 ## Trouver des offres
+
+**Recherche à la demande.** Écrivez par exemple « Trouve-moi des offres » dans l'assistant :
+
+1. L'assistant pose d'abord ses questions (postes visés, contrat, lieu ou télétravail, langues, entreprises à privilégier ou à éviter, nombre d'offres) et propose pour chacune une réponse tirée de votre profil. Il ne cherche rien avant votre réponse.
+2. ORBIT lit ensuite toutes les sources actives de Réglages, partie Sources de recherche, écarte ce qui sort de la recherche (mots exclus, autre contrat, autre lieu, offres déjà connues) et classe le reste. Le score tient compte des mots de la recherche, de vos orientations, des compétences de vos CV demandées par l'offre, du contrat et de la fraîcheur, jamais du lieu, qui n'est qu'un filtre.
+3. L'assistant relit le classement, écarte les faux positifs et ajoute les meilleures offres, 50 au plus. Chaque fiche garde le site d'où elle vient et le score de la recherche, en attendant une analyse complète.
+
+| Source | Accès | Réglage |
+| --- | --- | --- |
+| LinkedIn | Recherche publique, sans compte, lente (pauses de 2 à 4 secondes, deux mots-clés et trois pages au plus) | Aucun |
+| Welcome to the Jungle | Recherche publique du site, sans compte, avec des pauses | Aucun |
+| HelloWork | Pages de résultats publiques, sans compte, lentes | Aucun |
+| France Travail | API officielle | Clé gratuite sur francetravail.io (API « Offres d'emploi v2 ») |
+| Adzuna | API officielle | Clé gratuite sur developer.adzuna.com |
+| Remotive, Arbeitnow, RemoteOK | API ouvertes | Aucun |
+| Sites carrières (Greenhouse, Lever, Ashby, SmartRecruiters, Workday) | Données publiques des entreprises | Collez le lien d'une de leurs offres |
+| Sites carrières Yello (EY par exemple) | Recherche publique du site, sans compte, avec des pauses | Collez le lien du site carrières ou d'une offre |
+
+Toutes les sources sont actives au départ, et chacune se coupe dans Réglages. Les clés sont vérifiées puis chiffrées sur l'ordinateur. Les conditions d'utilisation de LinkedIn, Welcome to the Jungle et HelloWork n'autorisent pas la collecte automatique : leur lecture reste volontairement lente, pour un usage personnel, et chacune peut être coupée. L'APEC n'est pas lue : sa protection anti-robots refuse toute lecture automatique, ses offres arrivent par ses alertes e-mail.
 
 **Alertes e-mail.** Créez des alertes sur LinkedIn, Indeed, HelloWork, Welcome to the Jungle ou APEC, envoyées à l'adresse Gmail connectée. À chaque lecture de Gmail, ORBIT crée une fiche pour chaque offre dont le titre contient un mot de votre recherche et aucun mot exclu (Réglages, partie Alertes d'offres). Seul le lien propre de l'offre est gardé, jamais les jetons de connexion des e-mails.
 

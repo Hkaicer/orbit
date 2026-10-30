@@ -63,8 +63,14 @@ export type RequestMode = Mode | "auto";
 
 export type ModelChoice = "haiku" | "sonnet" | "opus";
 
-/** A special request: discovery reads the documents and writes the first profile, nothing else. */
-export type AssistantTask = "discovery";
+/** An image attached to a request, as sent by the interface (base64, without the data: prefix). */
+export interface ChatImage {
+  mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  data: string;
+}
+
+/** A special request: discovery reads the documents and writes the first profile, mail_review sorts the recruiting emails. */
+export type AssistantTask = "discovery" | "mail_review";
 
 /** A claude.ai connector of the account, as Claude Code sees it. */
 export interface ConnectorInfo {
@@ -247,6 +253,31 @@ export interface LibraryDocument {
 
 export type MailCategory = "ack" | "refusal" | "interview" | "test" | "test_done" | "offer" | "followup" | "alert" | "other";
 
+/**
+ * What the assistant read in one email: the application it belongs to (or a new
+ * offer to create), and the status it suggests. Nothing changes until the user
+ * accepts it, as it is or after editing it.
+ */
+export interface MailReview {
+  id: string;
+  mail: MailItem;
+  /** An application already tracked, or null for a new offer (company and title). */
+  applicationId: string | null;
+  application: { id: string; status: Status; company: string; title: string } | null;
+  company: string | null;
+  title: string | null;
+  location: string | null;
+  url: string | null;
+  /** The status to set, or null to only attach the email (or only add the offer). */
+  status: Status | null;
+  /** The status would undo progress (an old email read late): only the user applies it, one by one. */
+  back: boolean;
+  dueAt: string | null;
+  /** Why, in a short sentence written by the assistant. */
+  note: string;
+  createdAt: string;
+}
+
 export interface MailItem {
   id: string;
   date: string;
@@ -385,13 +416,15 @@ export interface ChatMessage {
   content: string;
   meta: {
     mode?: Mode;
+    /** Images the user attached (files in ORBIT's data folder, shown again in the conversation). */
+    images?: { file: string; mediaType: string }[];
     /** The mode was chosen by the assistant (auto). */
     auto?: boolean;
     model?: string;
     provider?: ProviderId;
     status?: "ok" | "error";
     proposalId?: string;
-    tools?: { name: string; ok: boolean }[];
+    tools?: { name: string; ok: boolean; error?: string }[];
     durationMs?: number;
     /** Files made during the request (CV, letter), to download. */
     files?: { name: string; path: string }[];

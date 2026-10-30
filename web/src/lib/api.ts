@@ -8,6 +8,7 @@ import type {
   Application,
   ApplicationDetail,
   AssistantTask,
+  ChatImage,
   ChatMessage,
   ConnectorInfo,
   Dashboard,
@@ -20,6 +21,7 @@ import type {
   KpiKey,
   LibraryDocument,
   MailItem,
+  MailReview,
   Mode,
   ModelChoice,
   Offer,
@@ -76,6 +78,25 @@ const qs = (o: Record<string, string | number | undefined | null>) => {
   return s ? `?${s}` : "";
 };
 
+export interface CompanySource {
+  type: "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday" | "yello";
+  company: string;
+  slug?: string;
+  host?: string;
+  tenant?: string;
+  site?: string;
+  eu?: boolean;
+  active: boolean;
+}
+
+export type BoardId = "linkedin" | "wttj" | "hellowork" | "france_travail" | "adzuna" | "remotive" | "arbeitnow" | "remoteok";
+
+export interface SearchSources {
+  boards: { id: BoardId; label: string; on: boolean; needsKey: boolean; keySet: boolean }[];
+  companies: CompanySource[];
+  adzunaCountry: string;
+}
+
 export interface Settings {
   profile: string;
   scoring: string;
@@ -102,6 +123,9 @@ export interface Settings {
   autoDocuments: boolean;
   setupDone: boolean;
   theme: "system" | "light" | "dark";
+  searchBoards: Record<BoardId, boolean>;
+  searchCompanies: CompanySource[];
+  adzunaCountry: string;
   alertKeywords: string[];
   alertExclude: string[];
 }
@@ -206,11 +230,21 @@ export const api = {
   gmailSync: () => post<SyncResult>("/api/gmail/sync"),
   mails: (f: { q?: string; unassigned?: boolean } = {}) => get<MailItem[]>(`/api/mails${qs({ q: f.q, unassigned: f.unassigned ? "1" : undefined })}`),
   attachMail: (id: string, applicationId: string) => post<{ ok: true }>(`/api/mails/${id}/attach`, { applicationId }),
+  mailReviews: () => get<MailReview[]>("/api/mail-reviews"),
+  updateMailReview: (id: string, changes: { applicationId?: string | null; company?: string | null; title?: string | null; status?: Status | null; dueAt?: string | null }) =>
+    patch<MailReview>(`/api/mail-reviews/${id}`, changes),
+  acceptMailReview: (id: string) => post<{ applicationId: string | null; offerId: string | null }>(`/api/mail-reviews/${id}/accept`),
+  dismissMailReview: (id: string) => post<{ ok: true }>(`/api/mail-reviews/${id}/dismiss`),
+  acceptAllMail: () => post<{ accepted: number; confirmed: number; left: number; errors: string[] }>("/api/mail-reviews/accept-all"),
 
   backups: () => get<{ name: string; size: number }[]>("/api/backups"),
   backup: () => post<{ name: string }>("/api/backups"),
 
   connectors: (force = false) => get<{ items: ConnectorInfo[]; checkedAt: string | null }>(`/api/ai/connectors${force ? "?force=1" : ""}`),
+  searchSources: () => get<SearchSources>("/api/search/sources"),
+  saveSearchKey: (service: "france_travail" | "adzuna", id: string, secret: string) => post<{ service: string }>("/api/search/keys", { service, id, secret }),
+  deleteSearchKey: (service: "france_travail" | "adzuna") => request<{ removed: boolean }>("DELETE", `/api/search/keys/${service}`),
+  addSearchCompany: (url: string, company?: string) => post<CompanySource>("/api/search/companies", { url, ...(company ? { company } : {}) }),
   aiProviders: () => get<AiProviders>("/api/ai/providers"),
   aiModels: () => get<{ id: string; label: string }[]>("/api/ai/models"),
   saveApiKey: (key: string) => post<{ service: ApiService }>("/api/ai/key", { key, consent: true }),
@@ -228,7 +262,7 @@ export const api = {
 export type StreamEvent = ServerEvent | { type: "fatal"; message: string };
 
 /** Send a request to the assistant and read its answer as it comes (one JSON event per line). */
-export async function streamChat(body: { message: string; mode: RequestMode; model: ModelChoice; task?: AssistantTask }, onEvent: (e: StreamEvent) => void): Promise<void> {
+export async function streamChat(body: { message: string; mode: RequestMode; model: ModelChoice; task?: AssistantTask; images?: ChatImage[] }, onEvent: (e: StreamEvent) => void): Promise<void> {
   let res: Response;
   try {
     res = await fetch("/api/ai/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

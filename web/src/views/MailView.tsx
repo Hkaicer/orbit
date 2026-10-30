@@ -1,11 +1,12 @@
-import type { MailItem } from "@shared/types";
-import { Inbox, KeyRound, Link2, LogOut, Mail, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { STATUS_LABELS, type MailItem, type MailReview, type Status } from "@shared/types";
+import { CheckCheck, CircleAlert, Inbox, KeyRound, Link2, LogOut, Mail, Pencil, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { ConfirmationCard, Section, ViewHeader, useAction } from "../components/bits";
-import { Badge, Button, Empty, ErrorState, Field, Spinner, confirmAction } from "../components/ui";
+import { ConfirmationCard, Section, StatusBadge, ViewHeader, useAction } from "../components/bits";
+import { Badge, Button, ErrorState, Field, Spinner, confirmAction } from "../components/ui";
 import { api } from "../lib/api";
-import { MAIL_LABELS, fmtDateTime, relative } from "../lib/format";
-import { errorMessage, useApplications, useDashboard, useGmail, useMails, useSettings } from "../lib/queries";
+import { MAIL_LABELS, fmtDate, fmtDateTime, relative } from "../lib/format";
+import { errorMessage, useApplications, useDashboard, useGmail, useMailReviews, useMails, useSettings } from "../lib/queries";
+import { useUi } from "../lib/store";
 
 export function MailView() {
   const gmail = useGmail();
@@ -33,8 +34,8 @@ function Connect() {
     <div className="settings-card">
       <div className="settings-card-title">Connecter Gmail en lecture seule</div>
       <p className="settings-card-hint">
-        ORBIT cherche les e-mails liés à vos candidatures : accusés de réception, tests, entretiens, refus et offres. Il n'envoie rien, ne supprime rien, ne déplace rien et ne change pas l'état lu
-        ou non lu de vos messages. Chaque changement de statut qu'il en déduit attend votre confirmation.
+        ORBIT cherche les e-mails liés à vos candidatures : accusés de réception, tests, entretiens, refus et offres. Il n'envoie rien, ne supprime rien, ne déplace rien et ne change pas l'état lu ou
+        non lu de vos messages. Chaque changement de statut qu'il en déduit attend votre confirmation.
       </p>
       <ol className="settings-steps">
         <li>Activez la validation en deux étapes sur ce compte Google, si ce n'est pas déjà fait.</li>
@@ -78,12 +79,35 @@ function Connected() {
   const gmail = useGmail();
   const settings = useSettings();
   const dash = useDashboard();
+  const reviews = useMailReviews();
+  const ui = useUi();
   const { busy, run } = useAction();
-  const [q, setQ] = useState("");
   const unassigned = useMails({ unassigned: true });
-  const all = useMails({ q: q.trim() || undefined });
   const g = gmail.data!;
   const confirmations = (dash.data?.confirmations ?? []).filter((c) => c.evidence.kind === "email");
+  const proposed = reviews.data ?? [];
+  const waiting = proposed.length + confirmations.length;
+
+  const acceptAll = async () => {
+    const { ok } = await confirmAction({
+      title: `Tout accepter (${waiting}) ?`,
+      body: "Chaque e-mail est rattaché à sa candidature et gardé comme preuve. Les nouvelles offres et candidatures sont créées, les statuts sont mis à jour. Un statut qui ferait reculer une candidature (un vieux mail lu tard) reste à décider ici.",
+      confirmLabel: "Tout accepter",
+    });
+    if (!ok) return;
+    await run(
+      "all",
+      () => api.acceptAllMail(),
+      (r) =>
+        [
+          `${r.accepted + r.confirmed} appliqué${r.accepted + r.confirmed > 1 ? "s" : ""}`,
+          r.left ? `${r.left} laissé${r.left > 1 ? "s" : ""} à décider` : "",
+          r.errors.length ? `${r.errors.length} en erreur : ${r.errors.slice(0, 2).join(" · ")}` : "",
+        ]
+          .filter(Boolean)
+          .join(", ") + ".",
+    );
+  };
 
   const disconnect = async () => {
     const { ok } = await confirmAction({
@@ -122,17 +146,33 @@ function Connected() {
           >
             Lire maintenant
           </Button>
+          <Button icon={<Sparkles />} onClick={() => ui.startTask("mail_review")}>
+            Trier avec l'assistant
+          </Button>
           <Button variant="ghost" icon={<LogOut />} loading={busy === "disconnect"} onClick={() => void disconnect()}>
             Déconnecter
           </Button>
         </div>
       </div>
 
-      <Section title="Statuts à confirmer" hint="Déduits des e-mails. Rien ne change sans votre accord, et un e-mail n'est qu'un indice : un test mentionné n'est pas un test fait.">
-        {confirmations.length === 0 ? (
-          <p className="text-3">Rien à confirmer.</p>
+      <Section
+        title="À valider"
+        hint="Ce que l'assistant et ORBIT ont lu dans vos e-mails. Rien ne change sans votre accord : modifiez une proposition, écartez-la, ou acceptez tout. « Trier avec l'assistant » lit les e-mails que ORBIT n'a pas su placer."
+        actions={
+          waiting > 1 && (
+            <Button variant="primary" icon={<CheckCheck />} loading={busy === "all"} onClick={() => void acceptAll()}>
+              Tout accepter ({waiting})
+            </Button>
+          )
+        }
+      >
+        {waiting === 0 ? (
+          <p className="text-3">Rien à valider. Lisez vos e-mails, puis laissez l'assistant trier ceux que ORBIT n'a pas su placer.</p>
         ) : (
           <div className="card-stack">
+            {proposed.map((r) => (
+              <ReviewCard key={r.id} review={r} />
+            ))}
             {confirmations.map((c) => (
               <ConfirmationCard key={c.evidence.id} item={c} />
             ))}
@@ -148,25 +188,140 @@ function Connected() {
           ))}
         </ul>
       </Section>
-
-      <Section
-        title="Tous les e-mails lus"
-        actions={
-          <div className="search-box search-sm">
-            <Search />
-            <input className="input input-bare" placeholder="Objet, expéditeur..." value={q} onChange={(e) => setQ(e.target.value)} aria-label="Rechercher un e-mail" />
-          </div>
-        }
-      >
-        {all.isLoading && <Spinner label="Chargement" />}
-        {all.data && all.data.length === 0 && <Empty small icon={<Inbox />} title="Aucun e-mail" body="Lancez une lecture pour chercher les e-mails de recrutement." />}
-        <ul className="mail-rows">
-          {(all.data ?? []).map((m) => (
-            <MailRow key={m.id} mail={m} />
-          ))}
-        </ul>
-      </Section>
     </>
+  );
+}
+
+/** What the assistant read in one email: applied only when the user accepts it, as it is or edited. */
+function ReviewCard({ review: r }: { review: MailReview }) {
+  const apps = useApplications();
+  const ui = useUi();
+  const { busy, run } = useAction();
+  const [editing, setEditing] = useState(false);
+  const [target, setTarget] = useState(r.applicationId ?? "new");
+  const [company, setCompany] = useState(r.company ?? "");
+  const [title, setTitle] = useState(r.title ?? "");
+  const [status, setStatus] = useState<Status | "">(r.status ?? "");
+  const [dueAt, setDueAt] = useState(r.dueAt?.slice(0, 10) ?? "");
+  const save = async () => {
+    const saved = await run(
+      "save",
+      () =>
+        api.updateMailReview(r.id, {
+          applicationId: target === "new" ? null : target,
+          company: target === "new" ? company.trim() || null : null,
+          title: target === "new" ? title.trim() || null : null,
+          status: status || null,
+          dueAt: dueAt || null,
+        }),
+      "Proposition modifiée.",
+    );
+    if (saved) setEditing(false);
+  };
+  return (
+    <div className="confirm-card">
+      <div className="confirm-icon">
+        <Sparkles />
+      </div>
+      <div className="confirm-main">
+        {r.application ? (
+          <button type="button" className="confirm-app" onClick={() => ui.go("applications", r.application!.id)}>
+            <strong>{r.application.company}</strong> · {r.application.title}
+          </button>
+        ) : (
+          <span className="confirm-app">
+            <Badge tone="accent">{r.status ? "Nouvelle candidature" : "Nouvelle offre"}</Badge> <strong>{r.company}</strong> · {r.title}
+          </span>
+        )}
+        <div className="confirm-source">
+          <span className="confirm-subject">{r.mail.subject || "(sans objet)"}</span>
+          <span className="text-3">
+            {r.mail.from} · {fmtDateTime(r.mail.date)}
+          </span>
+        </div>
+        {r.note && <p className="confirm-excerpt">{r.note}</p>}
+        <div className="confirm-suggest">
+          {r.application && (
+            <>
+              <span className="text-3">Statut actuel</span> <StatusBadge status={r.application.status} />
+            </>
+          )}
+          {r.status ? (
+            <>
+              <span className="text-3">{r.application ? "→ proposé" : "Statut proposé"}</span> <StatusBadge status={r.status} />
+            </>
+          ) : (
+            <span className="text-3">{r.application ? "Rattacher l'e-mail, sans changer le statut" : "Offre seulement, sans candidature"}</span>
+          )}
+          {r.dueAt && (
+            <Badge tone="warning">
+              <CircleAlert /> date lue : {fmtDate(r.dueAt)}
+            </Badge>
+          )}
+          {r.back && <Badge tone="danger">ferait reculer la candidature</Badge>}
+        </div>
+        {editing && (
+          <div className="review-edit">
+            <div className="field-row">
+              <Field label="Candidature" htmlFor={`rv-app-${r.id}`}>
+                <select id={`rv-app-${r.id}`} className="select" value={target} onChange={(e) => setTarget(e.target.value)}>
+                  <option value="new">Nouvelle offre...</option>
+                  {(apps.data ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.offer.company} · {a.offer.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Statut" htmlFor={`rv-status-${r.id}`}>
+                <select id={`rv-status-${r.id}`} className="select" value={status} onChange={(e) => setStatus(e.target.value as Status | "")}>
+                  <option value="">{target === "new" ? "Aucun (offre seulement)" : "Aucun changement"}</option>
+                  {(Object.keys(STATUS_LABELS) as Status[])
+                    .filter((s) => s !== "prepared" && s !== "validated")
+                    .map((s) => (
+                      <option key={s} value={s}>
+                        {STATUS_LABELS[s]}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <Field label="Date (test, entretien)" htmlFor={`rv-due-${r.id}`}>
+                <input id={`rv-due-${r.id}`} className="input" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+              </Field>
+            </div>
+            {target === "new" && (
+              <div className="field-row">
+                <Field label="Entreprise" htmlFor={`rv-co-${r.id}`}>
+                  <input id={`rv-co-${r.id}`} className="input" value={company} onChange={(e) => setCompany(e.target.value)} />
+                </Field>
+                <Field label="Poste" htmlFor={`rv-ti-${r.id}`}>
+                  <input id={`rv-ti-${r.id}`} className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+                </Field>
+              </div>
+            )}
+            <div className="row-gap">
+              <Button size="sm" variant="primary" loading={busy === "save"} disabled={target === "new" && (!company.trim() || !title.trim())} onClick={() => void save()}>
+                Enregistrer
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                Annuler
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="confirm-actions">
+        <Button size="sm" variant="primary" loading={busy === "accept"} disabled={editing} onClick={() => void run("accept", () => api.acceptMailReview(r.id), "Proposition appliquée.")}>
+          Accepter
+        </Button>
+        <Button size="sm" icon={<Pencil />} disabled={editing} onClick={() => setEditing(true)}>
+          Modifier
+        </Button>
+        <Button size="sm" variant="ghost" loading={busy === "dismiss"} onClick={() => void run("dismiss", () => api.dismissMailReview(r.id), "Proposition écartée.")}>
+          Écarter
+        </Button>
+      </div>
+    </div>
   );
 }
 

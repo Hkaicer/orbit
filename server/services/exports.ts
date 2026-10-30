@@ -73,7 +73,13 @@ export function exportCsv(db: Database): string {
   return "﻿" + [COLUMNS.join(";"), ...rows.map((r) => COLUMNS.map((c) => csvCell(r[c])).join(";"))].join("\r\n") + "\r\n";
 }
 
-const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+const xml = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
 
 function colName(i: number): string {
   let n = i + 1;
@@ -86,7 +92,13 @@ function colName(i: number): string {
   return s;
 }
 
-const fileUrl = (p: string) => `file:///${p.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/").replace(/^([A-Za-z])%3A/, "$1:")}`;
+const fileUrl = (p: string) =>
+  `file:///${p
+    .replace(/\\/g, "/")
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")
+    .replace(/^([A-Za-z])%3A/, "$1:")}`;
 
 /** A minimal Excel workbook: one sheet, bold header, frozen first row, clickable links. */
 export async function exportXlsx(db: Database): Promise<Buffer> {
@@ -106,7 +118,8 @@ export async function exportXlsx(db: Database): Promise<Buffer> {
         const v = row[h];
         if (typeof v === "string" && v) {
           if (h === "Lien" && /^https?:\/\//.test(v)) links.push({ ref: `${colName(c)}${r}`, target: v });
-          if ((h === "Dossier ORBIT" || h === "Dossier d'origine" || h === "CV utilisé" || h === "Lettre utilisée") && /^[A-Za-z]:\\/.test(v)) links.push({ ref: `${colName(c)}${r}`, target: fileUrl(v) });
+          if ((h === "Dossier ORBIT" || h === "Dossier d'origine" || h === "CV utilisé" || h === "Lettre utilisée") && /^[A-Za-z]:\\/.test(v))
+            links.push({ ref: `${colName(c)}${r}`, target: fileUrl(v) });
         }
         return cell(r, c, v, links.at(-1)?.ref === `${colName(c)}${r}` ? 2 : 0);
       }).join("")}</row>`,
@@ -126,7 +139,10 @@ ${links.length ? `<hyperlinks>${links.map((l, i) => `<hyperlink ref="${l.ref}" r
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
   );
-  zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+  );
   zip.file(
     "xl/workbook.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Candidatures" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">Candidatures!$A$1:$${colName(COLUMNS.length - 1)}$${rows.length + 1}</definedName></definedNames></workbook>`,

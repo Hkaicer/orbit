@@ -37,8 +37,8 @@ export interface MailReader {
   verify(): Promise<void>;
   /** Ids of the emails matching a Gmail search, newest first. */
   search(query: string, max: number): Promise<string[]>;
-  /** The emails with their text, in the order asked. Unknown ids are skipped. */
-  read(ids: string[]): Promise<RawMail[]>;
+  /** The emails with their text, in the order asked. Unknown ids are skipped. With html, the HTML version too (for its links). */
+  read(ids: string[], opts?: { html?: boolean }): Promise<RawMail[]>;
 }
 
 export function imapError(err: unknown): MailError {
@@ -118,7 +118,7 @@ export class GmailReader implements MailReader {
     });
   }
 
-  read(ids: string[]) {
+  read(ids: string[], opts: { html?: boolean } = {}) {
     return this.session(async (c) => {
       if (ids.length === 0) return [];
       const uids = (await c.search(ids.length === 1 ? { emailId: ids[0] } : { or: ids.map((id) => ({ emailId: id })) }, { uid: true })) || [];
@@ -130,7 +130,7 @@ export class GmailReader implements MailReader {
       for (const m of metas) {
         const parts = partsOf(m.bodyStructure);
         const text = parts.plain ? await download(c, m.uid, parts.plain) : null;
-        const html = !text && parts.html ? await download(c, m.uid, parts.html) : null;
+        const html = (!text || opts.html) && parts.html ? await download(c, m.uid, parts.html) : null;
         const from = m.envelope?.from?.[0];
         mails.push({
           id: m.emailId ?? String(m.uid),

@@ -16,7 +16,9 @@ import {
   Mail,
   Palette,
   Plug,
+  Radar,
   RefreshCw,
+  Trash2,
   Scale,
   Sparkles,
   Upload,
@@ -25,14 +27,14 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { PathLink, ViewHeader, useAction } from "../components/bits";
 import { Badge, Button, ErrorState, Field, IconButton, Segmented, Spinner, Switch, confirmAction } from "../components/ui";
-import { api, type ImportReport, type Settings } from "../lib/api";
+import { api, type BoardId, type CompanySource, type ImportReport, type Settings } from "../lib/api";
 import { fileName, sizeLabel } from "../lib/format";
-import { errorMessage, useAiProviders, useAiStatus, useBackups, useBootstrap, useConnectors, useSettings } from "../lib/queries";
+import { errorMessage, useAiProviders, useAiStatus, useBackups, useBootstrap, useConnectors, useSearchSources, useSettings } from "../lib/queries";
 import { toast } from "../lib/toast";
 import { useUi } from "../lib/store";
 import { applyTheme, type Theme } from "../lib/theme";
 
-type SectionId = "apparence" | "profil" | "grille" | "assistant" | "connecteurs" | "documents" | "dossiers" | "gmail" | "alertes" | "donnees";
+type SectionId = "apparence" | "profil" | "grille" | "assistant" | "connecteurs" | "documents" | "dossiers" | "gmail" | "recherche" | "alertes" | "donnees";
 
 interface SectionDef {
   id: SectionId;
@@ -149,6 +151,24 @@ const SECTIONS: SectionDef[] = [
       </>
     ),
     body: (s) => <MailSection s={s} />,
+  },
+  {
+    id: "recherche",
+    title: "Sources de recherche",
+    icon: <Radar />,
+    summary: (s) => {
+      const sites = Object.values(s.searchBoards).filter(Boolean).length;
+      const companies = s.searchCompanies.filter((c) => c.active).length;
+      return `${sites} site${sites > 1 ? "s" : ""} · ${companies} entreprise${companies > 1 ? "s" : ""} suivie${companies > 1 ? "s" : ""}`;
+    },
+    about: (
+      <>
+        Quand vous demandez à l'assistant de chercher des offres, il vous pose d'abord quelques questions, puis ORBIT lit ces sources, écarte ce qui ne correspond pas à votre recherche et classe le
+        reste selon votre profil et vos CV, jamais selon le lieu. Les 50 meilleures au plus deviennent des fiches, et chacune garde le site d'où elle vient. LinkedIn, Welcome to the Jungle et
+        HelloWork sont lus sans compte et lentement, avec des pauses entre deux demandes. L'APEC arrive par ses alertes e-mail : sa protection anti-robots refuse toute lecture automatique.
+      </>
+    ),
+    body: (s) => <SearchSection s={s} />,
   },
   {
     id: "alertes",
@@ -863,6 +883,167 @@ const words = (v: string) =>
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
+
+const BOARD_HINTS: Record<BoardId, string> = {
+  linkedin: "La recherche publique de LinkedIn, sans compte : votre compte n'est jamais utilisé. Lue lentement, deux mots-clés et trois pages au plus par recherche.",
+  wttj: "La recherche publique de Welcome to the Jungle, sans compte, par le service de recherche de son site. Lue avec des pauses.",
+  hellowork: "Les pages de résultats publiques de HelloWork, sans compte. Lues lentement, deux mots-clés et deux pages au plus.",
+  france_travail: "Toutes les offres publiées en France, par l'API officielle. Demande une clé gratuite.",
+  adzuna: "Offres réunies depuis de nombreux sites, par l'API officielle. Demande une clé gratuite.",
+  remotive: "Offres en télétravail, par leur API ouverte.",
+  arbeitnow: "Offres en Europe, surtout en Allemagne, par leur API ouverte.",
+  remoteok: "Offres en télétravail, par leur API ouverte.",
+};
+
+const KEY_HELP: Record<"france_travail" | "adzuna", { url: string; steps: string; id: string; secret: string }> = {
+  france_travail: {
+    url: "https://francetravail.io",
+    steps: "Créez un compte sur francetravail.io, puis une application abonnée à l'API « Offres d'emploi v2 ».",
+    id: "Identifiant client",
+    secret: "Clé secrète",
+  },
+  adzuna: { url: "https://developer.adzuna.com", steps: "Créez un compte sur developer.adzuna.com.", id: "App ID", secret: "App Key" },
+};
+
+const SYSTEM_LABELS: Record<CompanySource["type"], string> = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", smartrecruiters: "SmartRecruiters", workday: "Workday", yello: "Yello" };
+
+function SearchSection({ s }: { s: Settings }) {
+  const qc = useQueryClient();
+  const sources = useSearchSources();
+  const { busy, run } = useAction();
+  const [link, setLink] = useState("");
+  const [name, setName] = useState("");
+  const refresh = () => qc.invalidateQueries({ queryKey: ["search-sources"] });
+  const setBoard = (id: BoardId, on: boolean) => void run(`board-${id}`, () => api.saveSettings({ searchBoards: { ...s.searchBoards, [id]: on } })).then(refresh);
+  const setCompanies = (list: CompanySource[], message: string) => void run("companies", () => api.saveSettings({ searchCompanies: list }), message).then(refresh);
+  return (
+    <>
+      <Card title="Sites">
+        {(sources.data?.boards ?? []).map((b) => (
+          <div key={b.id} className="settings-row settings-row-top">
+            <div className="settings-row-label">
+              <span>{b.label}</span>
+              <span className="text-3 small">{BOARD_HINTS[b.id]}</span>
+              {b.needsKey && b.on && <SearchKey service={b.id as "france_travail" | "adzuna"} keySet={b.keySet} onChange={refresh} />}
+            </div>
+            <div className="settings-row-control">
+              <Switch checked={s.searchBoards[b.id]} label={b.label} onChange={(v) => setBoard(b.id, v)} />
+            </div>
+          </div>
+        ))}
+        {sources.isLoading && <Spinner label="Chargement" />}
+      </Card>
+      <Card title="Entreprises suivies">
+        <p className="text-3 small">
+          Le site carrières de chaque entreprise est lu directement. Pour en ajouter une, collez le lien de son site carrières ou d'une de ses offres : ORBIT reconnaît Greenhouse, Lever, Ashby,
+          SmartRecruiters, Workday et Yello (EY par exemple, lu lentement, comme un visiteur). L'assistant peut aussi en ajouter une que vous lui citez avec son lien.
+        </p>
+        <ul className="connector-list">
+          {s.searchCompanies.map((c, i) => (
+            <li key={`${c.type}-${c.slug ?? c.site}`} className="connector-row connector-row-inline">
+              <span className="connector-main">
+                <span className="connector-name">{c.company}</span>
+                <span className="text-3 small">{SYSTEM_LABELS[c.type]}</span>
+              </span>
+              <Switch
+                checked={c.active}
+                label={`Suivre ${c.company}`}
+                onChange={(v) =>
+                  setCompanies(
+                    s.searchCompanies.map((x, j) => (j === i ? { ...x, active: v } : x)),
+                    v ? `${c.company} suivie.` : `${c.company} mise de côté.`,
+                  )
+                }
+              />
+              <IconButton
+                label={`Retirer ${c.company}`}
+                onClick={() =>
+                  setCompanies(
+                    s.searchCompanies.filter((_, j) => j !== i),
+                    `${c.company} retirée.`,
+                  )
+                }
+              >
+                <Trash2 />
+              </IconButton>
+            </li>
+          ))}
+        </ul>
+        <div className="field-row">
+          <Field label="Lien d'une offre ou du site carrières" htmlFor="st-company-url">
+            <input id="st-company-url" className="input" placeholder="https://jobs.lever.co/entreprise/..." value={link} onChange={(e) => setLink(e.target.value)} />
+          </Field>
+          <Field label="Nom (facultatif)" htmlFor="st-company-name">
+            <input id="st-company-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+        </div>
+        <div className="save-row">
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={link.trim().length < 10}
+            loading={busy === "add-company"}
+            onClick={() =>
+              void run(
+                "add-company",
+                () => api.addSearchCompany(link.trim(), name.trim() || undefined),
+                (c) => `${c.company} suivie (${SYSTEM_LABELS[c.type]}).`,
+              ).then(async (c) => {
+                if (c) {
+                  setLink("");
+                  setName("");
+                }
+                await refresh();
+              })
+            }
+          >
+            Ajouter
+          </Button>
+        </div>
+      </Card>
+    </>
+  );
+}
+
+/** The key of France Travail or Adzuna: checked, then kept encrypted on this computer. */
+function SearchKey({ service, keySet, onChange }: { service: "france_travail" | "adzuna"; keySet: boolean; onChange: () => void }) {
+  const { busy, run } = useAction();
+  const [id, setId] = useState("");
+  const [secret, setSecret] = useState("");
+  const help = KEY_HELP[service];
+  if (keySet) {
+    return (
+      <span className="row-gap small">
+        <span className="text-2">Clé enregistrée, chiffrée sur cet ordinateur.</span>
+        <Button size="sm" variant="ghost" loading={busy === "del"} onClick={() => void run("del", () => api.deleteSearchKey(service), "Clé supprimée.").then(onChange)}>
+          Supprimer la clé
+        </Button>
+      </span>
+    );
+  }
+  return (
+    <span className="search-key">
+      <span className="text-3 small">
+        {help.steps}{" "}
+        <a href={help.url} target="_blank" rel="noreferrer">
+          {help.url.replace("https://", "")}
+        </a>
+      </span>
+      <span className="search-key-fields">
+        <input className="input mono" aria-label={help.id} placeholder={help.id} value={id} onChange={(e) => setId(e.target.value)} />
+        <input className="input mono" type="password" aria-label={help.secret} placeholder={help.secret} value={secret} onChange={(e) => setSecret(e.target.value)} />
+        <Button
+          size="sm"
+          disabled={id.trim().length < 4 || secret.trim().length < 4}
+          loading={busy === "save"}
+          onClick={() => void run("save", () => api.saveSearchKey(service, id.trim(), secret.trim()), "Clé vérifiée et enregistrée.").then(onChange)}
+        >
+          Vérifier et enregistrer
+        </Button>
+      </span>
+    </span>
+  );
+}
 
 function AlertsSection({ s }: { s: Settings }) {
   const [keywords, setKeywords] = useState(s.alertKeywords.join(", "));

@@ -12,6 +12,8 @@ import { CALLBACK_PATH, ChatGptError, type ChatGptAuth } from "./ai/chatgptAuth"
 import type { ClaudeRunner } from "./ai/claude";
 import { detectService, type Providers } from "./ai/providers";
 import type { AiVault } from "./ai/vault";
+import { BOARD_LABELS, collectCompany, verifySearchKey, type BoardId, type CompanySource } from "./search/collectors";
+import { companyFromUrl } from "./search/search";
 import type { AppConfig } from "./config";
 import type { Database } from "./db/database";
 import {
@@ -34,6 +36,7 @@ import {
   zStatus,
 } from "./domain/applications";
 import { listEvents } from "./domain/history";
+import { acceptAll, acceptReview, dismissReview, listReviews, updateReview } from "./domain/mailReviews";
 import { createOffer, getOffer, listOffers, resolveSimilar, saveAnalysis, setOfferStatus, updateOffer, zOfferInput, zOfferPatch } from "./domain/offers";
 import { AppError } from "./errors";
 import { log } from "./logger";
@@ -273,7 +276,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
     const q = z.object({ q: z.string().max(200).optional(), unassigned: z.enum(["1"]).optional() }).parse(req.query);
     const where: string[] = [];
     const params: string[] = [];
-    if (q.unassigned) where.push("application_id IS NULL AND category NOT IN ('other', 'alert')");
+    // An email the assistant is placing, or has placed, is shown with its proposal instead.
+    if (q.unassigned) where.push("application_id IS NULL AND category NOT IN ('other', 'alert') AND id NOT IN (SELECT mail_id FROM mail_reviews WHERE state IN ('pending', 'accepted'))");
     if (q.q?.trim()) {
       where.push("(subject LIKE ? OR snippet LIKE ? OR from_name LIKE ? OR from_address LIKE ?)");
       const like = `%${q.q.trim()}%`;
@@ -281,6 +285,14 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
     }
     return db.all(`SELECT * FROM mails ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY date DESC LIMIT 300`, ...params).map(rowToMail);
   });
+  app.get("/api/mail-reviews", async () => listReviews(db));
+  app.patch("/api/mail-reviews/:id", async (req) => updateReview(db, zId.parse(req.params).id, req.body ?? {}));
+  app.post("/api/mail-reviews/:id/accept", async (req) => acceptReview(db, zId.parse(req.params).id));
+  app.post("/api/mail-reviews/:id/dismiss", async (req) => {
+    dismissReview(db, zId.parse(req.params).id);
+    return { ok: true };
+  });
+  app.post("/api/mail-reviews/accept-all", async () => acceptAll(db));
   app.post("/api/mails/:id/attach", async (req) => {
     try {
       mailbox.attach(db, zId.parse(req.params).id, z.object({ applicationId: z.string().min(1) }).parse(req.body).applicationId);
@@ -316,6 +328,63 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
   // ---- assistant -------------------------------------------------------------
   app.get("/api/ai/status", async (req) => providers.status(settings(), z.object({ force: z.enum(["0", "1"]).optional() }).parse(req.query).force === "1"));
   app.get("/api/ai/providers", async () => providers.overview(settings()));
+
+  // ---- the sources of the job search -----------------------------------------
+  app.get("/api/search/sources", async () => {
+    await vault.ready();
+    const s = settings();
+    const keys = vault.read().search ?? {};
+    return {
+      boards: (Object.entries(s.searchBoards) as [BoardId, boolean][]).map(([id, on]) => ({
+        id,
+        label: BOARD_LABELS[id],
+        on,
+        needsKey: id === "france_travail" || id === "adzuna",
+        keySet: id === "france_travail" ? Boolean(keys.franceTravail) : id === "adzuna" ? Boolean(keys.adzuna) : true,
+      })),
+      companies: s.searchCompanies,
+      adzunaCountry: s.adzunaCountry,
+    };
+  });
+  app.post("/api/search/keys", async (req) => {
+    const body = z.object({ service: z.enum(["france_travail", "adzuna"]), id: z.string().trim().min(4).max(200), secret: z.string().trim().min(4).max(400) }).parse(req.body);
+    const ok = await verifySearchKey(deps.fetch, body.service, body.id, body.secret, settings().adzunaCountry).catch(() => false);
+    if (!ok) throw new AppError("validation", `${body.service === "adzuna" ? "Adzuna" : "France Travail"} a refusé ces identifiants, ou le service est injoignable.`);
+    await vault.ready();
+    vault.update((s) => ({
+      ...s,
+      search: { ...s.search, ...(body.service === "adzuna" ? { adzuna: { id: body.id, key: body.secret } } : { franceTravail: { id: body.id, secret: body.secret } }) },
+    }));
+    await vault.flush();
+    return { service: body.service };
+  });
+  app.delete("/api/search/keys/:service", async (req) => {
+    const service = z.object({ service: z.enum(["france_travail", "adzuna"]) }).parse(req.params).service;
+    await vault.ready();
+    vault.update((s) => {
+      const search = { ...s.search };
+      if (service === "adzuna") delete search.adzuna;
+      else delete search.franceTravail;
+      return { ...s, search };
+    });
+    await vault.flush();
+    return { removed: true };
+  });
+  app.post("/api/search/companies", async (req) => {
+    const body = z.object({ url: z.string().min(10).max(1000), company: z.string().max(120).optional() }).parse(req.body);
+    const src = companyFromUrl(body.url, body.company);
+    if (!src) throw new AppError("validation", "Ce lien ne vient pas d'un site carrières reconnu : Greenhouse, Lever, Ashby, SmartRecruiters, Workday ou Yello.");
+    const list = settings().searchCompanies as CompanySource[];
+    if (list.some((c) => c.type === src.type && (c.slug ?? c.site) === (src.slug ?? src.site))) throw new AppError("conflict", `${src.company} est déjà suivie.`);
+    // One reading of the site, to be sure it answers before following it.
+    try {
+      await collectCompany(src, { keywords: ["a"], location: "", since: null, internship: false, remoteOnly: false }, { fetch: deps.fetch, sleep: async () => undefined });
+    } catch {
+      throw new AppError("validation", `Le site carrières de ${src.company} ne répond pas à cette adresse. Vérifiez le lien.`);
+    }
+    saveSettings(db, { searchCompanies: [...list, src] });
+    return src;
+  });
   app.get("/api/ai/models", async () => providers.models(settings()));
 
   // An API key: recognized from its form, checked with a free call, kept encrypted, used only after consent.
@@ -374,9 +443,34 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
     return { ok: true };
   });
   app.post("/api/ai/cancel", async () => ({ cancelled: agent.cancel() }));
-  app.post("/api/ai/chat", async (req, reply) => {
+  app.get("/api/ai/images/:file", async (req, reply) => {
+    const p = agent.imagePath(String((req.params as { file: string }).file));
+    if (!p) throw new AppError("not_found", "Image introuvable.");
+    const type = p.endsWith(".png") ? "image/png" : p.endsWith(".webp") ? "image/webp" : p.endsWith(".gif") ? "image/gif" : "image/jpeg";
+    return reply.header("content-type", type).header("cache-control", "private, max-age=86400").send(fs.readFileSync(p));
+  });
+  app.post("/api/ai/chat", { bodyLimit: 30 * 1024 * 1024 }, async (req, reply) => {
     const body = z
-      .object({ message: z.string().max(60_000), mode: z.enum(["auto", "A", "B", "C"]).optional(), model: z.enum(["haiku", "sonnet", "opus"]).optional(), task: z.enum(["discovery"]).optional() })
+      .object({
+        message: z.string().max(60_000),
+        mode: z.enum(["auto", "A", "B", "C"]).optional(),
+        model: z.enum(["haiku", "sonnet", "opus"]).optional(),
+        task: z.enum(["discovery", "mail_review"]).optional(),
+        // At most 4 images of about 5 MB each, already reduced by the interface.
+        images: z
+          .array(
+            z.object({
+              mediaType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
+              data: z
+                .string()
+                .min(20)
+                .max(7_000_000)
+                .regex(/^[A-Za-z0-9+/=]+$/),
+            }),
+          )
+          .max(4)
+          .optional(),
+      })
       .parse(req.body);
     if (agent.busy) throw new AppError("conflict", "ORBIT traite encore la demande précédente.");
     reply.hijack();
@@ -385,7 +479,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
       if (!reply.raw.writableEnded) reply.raw.write(JSON.stringify(e) + "\n");
     };
     try {
-      await agent.chat({ message: body.message, mode: body.mode, model: body.model, task: body.task }, send);
+      await agent.chat({ message: body.message, mode: body.mode, model: body.model, task: body.task, images: body.images }, send);
     } catch (err) {
       reply.raw.write(JSON.stringify({ type: "fatal", message: err instanceof AppError ? err.message : "Une erreur est survenue. Vos données n'ont pas été modifiées." }) + "\n");
     } finally {

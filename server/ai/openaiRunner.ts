@@ -134,7 +134,8 @@ export class OpenAiRunner implements AssistantRunner {
     const effort = REASONING[req.model] ?? "medium";
     const tools = toolDefinitions(rc).map((t) => ({ type: "function", name: t.name, description: t.description, parameters: t.inputSchema, strict: false }));
     // The whole exchange goes with each request: nothing is kept on OpenAI's side (store: false).
-    const input: unknown[] = [{ role: "user", content: req.prompt }];
+    const images = (req.images ?? []).map((i) => ({ type: "input_image", image_url: `data:${i.mediaType};base64,${i.data}` }));
+    const input: unknown[] = [{ role: "user", content: images.length ? [{ type: "input_text", text: req.prompt }, ...images] : req.prompt }];
     let lastModel: string | null = model.id;
     req.onEvent({ type: "status", text: "thinking" });
 

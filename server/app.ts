@@ -34,6 +34,8 @@ export interface AppOptions {
   /** Requests to OpenAI and Anthropic (a stand-in in tests). */
   aiFetch?: Fetch;
   verifyKey?: (service: ApiService, key: string) => Promise<KeyCheck>;
+  /** Pauses between LinkedIn requests during a job search (instant in tests). */
+  searchSleep?: (ms: number) => Promise<void>;
 }
 
 export interface AppHandle {
@@ -68,7 +70,7 @@ export async function createApp(opts: AppOptions): Promise<AppHandle> {
   const agent = new Agent(
     db,
     (s) => providers.pick(s),
-    () => ({ db, config, mailbox, fetch: fetchFn }),
+    () => ({ db, config, mailbox, fetch: fetchFn, vault, sleep: opts.searchSleep }),
   );
 
   // Local only: requests addressed to this computer, and no state change coming from another website.

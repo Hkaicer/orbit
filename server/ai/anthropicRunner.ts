@@ -83,7 +83,8 @@ export class AnthropicRunner implements AssistantRunner {
     const model = await this.resolveModel(req.model);
     const effort = req.effort as "low" | "medium" | "high" | "xhigh" | null;
     const tools: Anthropic.Tool[] = toolDefinitions(rc).map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema as Anthropic.Tool.InputSchema }));
-    const messages: Anthropic.MessageParam[] = [{ role: "user", content: req.prompt }];
+    const images = (req.images ?? []).map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mediaType, data: i.data } }));
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: images.length ? [{ type: "text", text: req.prompt }, ...images] : req.prompt }];
     const timeout = AbortSignal.timeout(req.timeoutMs);
     const signal = AbortSignal.any([req.signal, timeout]);
     req.onEvent({ type: "status", text: "thinking" });
