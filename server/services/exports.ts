@@ -30,7 +30,7 @@ const COLUMNS = [
 
 type Row = Record<(typeof COLUMNS)[number], string | number | null>;
 
-const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : "");
+const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR") : "");
 
 export function trackingRows(db: Database): Row[] {
   return listApplications(db).map((a) => {

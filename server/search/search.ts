@@ -26,9 +26,14 @@ import {
 
 export type ContractKind = "stage" | "alternance" | "cdi" | "cdd" | "freelance";
 
+/** Where the user looks for a job: France (the first use of ORBIT) or Morocco. */
+export type SearchCountry = "fr" | "ma";
+
 export interface SearchCriteria {
   /** Words searched for, in French and in English (cybersécurité, cybersecurity, SOC...). */
   keywords: string[];
+  /** Set by the assistant from the profile. Missing: found from the places asked, then from the profile. */
+  country?: SearchCountry;
   /** Empty: every kind of contract. */
   contracts: ContractKind[];
   /** Places to keep, as a filter only (Paris, Île-de-France, France). Empty: everywhere. */
@@ -53,7 +58,9 @@ export interface ScoredJob extends FoundJob {
 
 export interface SearchOutcome {
   searchId: string;
-  sources: { source: string; found: number; error?: string }[];
+  country: SearchCountry;
+  /** skipped: a site that has no offers in the country of the search. */
+  sources: { source: string; found: number; error?: string; skipped?: string }[];
   /** Offers read, then left out, before ranking. */
   counts: { read: number; outsideSearch: number; excluded: number; otherContract: number; otherPlace: number; alreadyInOrbit: number; duplicates: number; kept: number };
   results: ScoredJob[];
@@ -165,6 +172,56 @@ const FRANCE = [
   "colomiers",
   "merignac",
 ];
+/** Moroccan cities and business parks, as job sites write them, in French and in English. */
+const MOROCCO = [
+  "maroc",
+  "morocco",
+  "casablanca",
+  "rabat",
+  "sale",
+  "temara",
+  "skhirat",
+  "kenitra",
+  "mohammedia",
+  "bouskoura",
+  "nouaceur",
+  "berrechid",
+  "settat",
+  "el jadida",
+  "tanger",
+  "tangier",
+  "tangiers",
+  "tetouan",
+  "larache",
+  "al hoceima",
+  "marrakech",
+  "marrakesh",
+  "safi",
+  "essaouira",
+  "benguerir",
+  "ben guerir",
+  "fes",
+  "fez",
+  "meknes",
+  "ifrane",
+  "taza",
+  "agadir",
+  "oujda",
+  "nador",
+  "beni mellal",
+  "khouribga",
+  "khemisset",
+  "errachidia",
+  "ouarzazate",
+  "laayoune",
+  "dakhla",
+  "casanearshore",
+  "technopolis",
+  "rabat shore",
+  "tanger med",
+  "atlantic free zone",
+];
+const MOROCCO_NAMES = new Set(["maroc", "morocco", "ma", "royaume du maroc", "kingdom of morocco"]);
 const IDF_DEPT = /\((75|77|78|91|92|93|94|95)\)|\b(75|77|78|91|92|93|94|95)\d{3}\b/;
 const FR_DEPT = /\((0[1-9]|[1-8]\d|9[0-5]|2a|2b)\)|\b(0[1-9]|[1-8]\d|9[0-5])\d{3}\b/;
 
@@ -175,7 +232,32 @@ export function placeFits(location: string, place: string): boolean {
   const any = (names: string[]) => names.some((n) => where.includes(` ${n} `) || where.includes(` ${n}`));
   if (p === "france" || p === "fr") return any(FRANCE) || FR_DEPT.test(location.toLowerCase());
   if (p === "ile de france" || p === "idf" || p === "paris region" || p === "region parisienne") return any(IDF) || IDF_DEPT.test(location);
+  // Morocco: whole words only, "Salé" is not "Salerno".
+  if (MOROCCO_NAMES.has(p)) return MOROCCO.some((n) => where.includes(` ${n} `));
   return where.includes(` ${p}`);
+}
+
+/** Sites with offers in France only: skipped when the search is in Morocco. */
+export const FRANCE_ONLY: BoardId[] = ["france_travail", "hellowork", "adzuna"];
+
+/**
+ * The country of a search: what the assistant says from the profile, else the
+ * places asked, else the profile itself (search and preference lines, then the
+ * city of the contact details), else France.
+ */
+export function searchCountry(asked: SearchCountry | undefined, places: string[], profile: { text: string; city: string }): SearchCountry {
+  if (asked) return asked;
+  const of = (t: string): SearchCountry | null => (placeFits(t, "maroc") ? "ma" : placeFits(t, "france") ? "fr" : null);
+  for (const p of places) {
+    const c = of(p) ?? (MOROCCO_NAMES.has(normalize(p)) ? "ma" : null);
+    if (c) return c;
+  }
+  const lines = profile.text.split("\n").filter((l) => /^- (Recherche|Préférences|Preferences)\b/i.test(l.trim()));
+  for (const l of [...lines, profile.city]) {
+    const c = of(l);
+    if (c) return c;
+  }
+  return "fr";
 }
 
 const LINK_WORDS = new Set(["et", "de", "du", "des", "la", "le", "les", "en", "a", "au", "aux", "pour", "and", "of", "the", "in", "for", "to"]);
@@ -344,9 +426,16 @@ export async function runSearch(d: SearchDeps, criteria: SearchCriteria): Promis
     remoteOnly: criteria.remote && !criteria.locations.length,
   };
 
+  const country = searchCountry(criteria.country, criteria.locations, { text: s.profile, city: s.contact.city });
   const tasks: { source: string; run: () => Promise<FoundJob[]> }[] = [];
+  const skipped: SearchOutcome["sources"] = [];
   for (const [board, on] of Object.entries(s.searchBoards) as [BoardId, boolean][]) {
-    if (on && (wanted(board) || wanted(BOARD_LABELS[board]))) tasks.push({ source: BOARD_LABELS[board], run: () => collectBoard(board, q, d.collect, d.keys, { adzunaCountry: s.adzunaCountry }) });
+    if (!on || !(wanted(board) || wanted(BOARD_LABELS[board]))) continue;
+    if (country === "ma" && FRANCE_ONLY.includes(board)) {
+      skipped.push({ source: BOARD_LABELS[board], found: 0, skipped: "offres en France seulement : passé pour une recherche au Maroc" });
+      continue;
+    }
+    tasks.push({ source: BOARD_LABELS[board], run: () => collectBoard(board, q, d.collect, d.keys, { adzunaCountry: s.adzunaCountry }) });
   }
   for (const c of s.searchCompanies as CompanySource[]) {
     if (c.active && (wanted(c.company) || wanted(c.type))) tasks.push({ source: c.company, run: () => collectCompany(c, q, d.collect) });
@@ -447,7 +536,8 @@ export async function runSearch(d: SearchDeps, criteria: SearchCriteria): Promis
 
   return {
     searchId,
-    sources: settled.map((r) => ({ source: r.source, found: r.jobs.length, ...(r.error ? { error: r.error } : {}) })),
+    country,
+    sources: [...settled.map((r) => ({ source: r.source, found: r.jobs.length, ...(r.error ? { error: r.error } : {}) })), ...skipped],
     counts,
     results,
   };

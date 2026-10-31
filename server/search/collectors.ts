@@ -206,6 +206,9 @@ export async function collectCompany(src: CompanySource, q: CollectQuery, d: Col
 /** Yello: a few keywords and pages, so that a search stays a visit. */
 export const YELLO_LIMITS = { keywords: 6, pages: 3, minPauseMs: 1500, maxPauseMs: 3000 };
 
+/** A country as career sites name it in their filters, in English first (Yello boards are mostly in English). */
+const PLACE_NAMES: Record<string, string[]> = { maroc: ["Morocco", "Maroc"], morocco: ["Morocco", "Maroc"], france: ["France"] };
+
 const fold = (t: string) =>
   t
     .normalize("NFD")
@@ -233,15 +236,17 @@ async function yello(src: CompanySource, q: CollectQuery, d: CollectDeps): Promi
     const page = await res.text();
     // The board's filters (Country/Region, City...): each one says whether it knows the place.
     const fields = [...new Set([...page.matchAll(/data-filter-search-url="([^"]+)"/g)].map((m) => m[1]!.replace(/&amp;/g, "&")))].filter((u) => u.startsWith(`${base}/`)).slice(0, 6);
-    const wanted = fold(q.location);
-    for (const url of fields) {
-      await pause();
-      const data = await get(`${url}${url.includes("?") ? "&" : "?"}${new URLSearchParams({ query: q.location.trim(), page: "1" })}`);
-      const hit = ((data.filter_answers as J[] | undefined) ?? []).find((a) => fold(s(a.label)) === wanted);
-      if (hit) {
-        filters = [Number(hit.id)];
-        place = s(hit.label);
-        break;
+    const names = PLACE_NAMES[fold(q.location)] ?? [q.location.trim()];
+    search: for (const name of names) {
+      for (const url of fields) {
+        await pause();
+        const data = await get(`${url}${url.includes("?") ? "&" : "?"}${new URLSearchParams({ query: name, page: "1" })}`);
+        const hit = ((data.filter_answers as J[] | undefined) ?? []).find((a) => fold(s(a.label)) === fold(name));
+        if (hit) {
+          filters = [Number(hit.id)];
+          place = s(hit.label);
+          break search;
+        }
       }
     }
   }

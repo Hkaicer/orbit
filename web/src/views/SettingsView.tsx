@@ -177,8 +177,8 @@ const SECTIONS: SectionDef[] = [
     summary: (s) => `${s.alertKeywords.length} mots de recherche · ${s.alertExclude.length} mots exclus`,
     about: (
       <>
-        Les alertes e-mail de LinkedIn, Indeed, HelloWork, Welcome to the Jungle et APEC sont lues avec Gmail. Une offre devient une fiche quand son titre contient un des mots de votre recherche et
-        aucun mot exclu. Seul le lien propre de l'offre est gardé, sans les jetons de connexion des e-mails.
+        Les alertes e-mail de LinkedIn, Indeed, HelloWork, Welcome to the Jungle et APEC, et au Maroc de Rekrute et Emploi.ma, sont lues avec Gmail. Une offre devient une fiche quand son titre
+        contient un des mots de votre recherche et aucun mot exclu. Seul le lien propre de l'offre est gardé, sans les jetons de connexion des e-mails.
       </>
     ),
     body: (s) => <AlertsSection s={s} />,
@@ -887,9 +887,9 @@ const words = (v: string) =>
 const BOARD_HINTS: Record<BoardId, string> = {
   linkedin: "La recherche publique de LinkedIn, sans compte : votre compte n'est jamais utilisé. Lue lentement, deux mots-clés et trois pages au plus par recherche.",
   wttj: "La recherche publique de Welcome to the Jungle, sans compte, par le service de recherche de son site. Lue avec des pauses.",
-  hellowork: "Les pages de résultats publiques de HelloWork, sans compte. Lues lentement, deux mots-clés et deux pages au plus.",
-  france_travail: "Toutes les offres publiées en France, par l'API officielle. Demande une clé gratuite.",
-  adzuna: "Offres réunies depuis de nombreux sites, par l'API officielle. Demande une clé gratuite.",
+  hellowork: "Les pages de résultats publiques de HelloWork, sans compte. Lues lentement, deux mots-clés et deux pages au plus. Offres en France seulement : passé pour une recherche au Maroc.",
+  france_travail: "Toutes les offres publiées en France, par l'API officielle. Demande une clé gratuite. Passé pour une recherche au Maroc.",
+  adzuna: "Offres réunies depuis de nombreux sites, par l'API officielle, dans le pays choisi. Demande une clé gratuite. Passé pour une recherche au Maroc.",
   remotive: "Offres en télétravail, par leur API ouverte.",
   arbeitnow: "Offres en Europe, surtout en Allemagne, par leur API ouverte.",
   remoteok: "Offres en télétravail, par leur API ouverte.",

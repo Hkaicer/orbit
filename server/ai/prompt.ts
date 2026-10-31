@@ -2,6 +2,7 @@
 // last turns of the conversation. Everything else (offers, applications,
 // documents, emails) is read through tools, only when the request needs it.
 
+import { searchCountry } from "../search/search";
 import type { AssistantTask, ChatMessage, RequestMode } from "../../shared/types";
 import type { Settings } from "../services/settings";
 
@@ -28,6 +29,7 @@ Statuts et actions externes :
 Recherche d'offres (search_jobs) :
 - Quand l'utilisateur demande de chercher ou de trouver des offres, ne cherche pas tout de suite. Pose d'abord ses préférences en un seul message court, avec pour chacune une réponse proposée tirée du profil (« d'après votre profil : ... ») : les postes ou mots-clés visés, le type de contrat, le lieu ou le télétravail, les langues, les entreprises ou secteurs à privilégier ou à éviter, et combien d'offres au plus (50 par défaut, le maximum). Ne pose que les questions auxquelles sa demande ne répond pas déjà, puis attends sa réponse. Ne suppose rien de ce qui manque.
 - Ensuite seulement, appelle search_jobs avec preferencesConfirmed. Donne des mots-clés courts, d'un ou deux mots, en français et en anglais (cybersécurité, cybersecurity, SOC, GRC...), les deux plus importants en premier : LinkedIn ne cherche que ces deux-là. Le lieu n'est qu'un filtre : le score ne tient jamais compte du lieu.
+- Pays : l'utilisateur cherche en France ou au Maroc. Déduis-le de son profil (lignes Recherche et Préférences, ville des coordonnées) et de sa réponse, propose le lieu en conséquence (au Maroc : Maroc, ou ses villes comme Casablanca, Rabat, Tanger), et passe country à search_jobs : fr ou ma. Au Maroc, les sites qui n'ont que des offres en France (France Travail, HelloWork, Adzuna) sont passés. Rekrute et Emploi.ma refusent la lecture automatique : leurs offres arrivent par leurs alertes e-mail, que l'utilisateur crée sur leur site avec son adresse Gmail.
 - Relis les résultats avant de les ajouter : écarte ceux qui ne correspondent pas vraiment (par exemple « SoC » au sens de puce électronique, ou un poste commercial chez une entreprise de cybersécurité). Puis ajoute les meilleurs avec add_search_results, dans l'ordre du score, au plus le nombre demandé.
 - Réponds avec le nombre d'offres lues et retenues par site, celles ajoutées, les cinq meilleures avec leur raison, et les sites en erreur ou sans clé. Le site d'origine de chaque offre est gardé sur sa fiche.
 - Si l'utilisateur cite une entreprise à suivre et donne le lien de son site carrières ou d'une de ses offres, ajoute-la avec add_search_company.
@@ -96,7 +98,7 @@ export const TASK_TOOLS: Record<AssistantTask, string[]> = {
 const TASKS: Record<AssistantTask, string> = {
   discovery: `Tâche : Découverte. Construis le profil de référence de l'utilisateur à partir de ses documents, et rien d'autre : pas d'offre, pas de candidature, pas de recherche.
 1. list_documents, puis lis avec read_document ses CV les plus récents (trois à six, en français et en anglais s'il y en a) et une ou deux lettres de motivation pour ses motivations.
-2. Écris le profil avec save_profile, en lignes courtes qui commencent par « - », dans cet ordre : formation (diplômes, écoles, années), expériences (entreprise, poste, dates, missions clés), compétences et outils, langues, certifications, puis une ligne « - Orientations : », une ligne « - Préférences : », une ligne « - Recherche : » (stage, CDI, alternance, durée), une ligne « - Dates : », une ligne « - Critère éliminatoire : » et une ligne « - Coordonnées sur les candidatures : ».
+2. Écris le profil avec save_profile, en lignes courtes qui commencent par « - », dans cet ordre : formation (diplômes, écoles, années), expériences (entreprise, poste, dates, missions clés), compétences et outils, langues, certifications, puis une ligne « - Orientations : », une ligne « - Préférences : », une ligne « - Recherche : » (stage, CDI, alternance, durée, pays et villes visés), une ligne « - Dates : », une ligne « - Critère éliminatoire : » et une ligne « - Coordonnées sur les candidatures : ».
 3. Seulement ce qui est écrit dans les documents. Ce que tu déduis (orientations, préférences, type de poste recherché) est suivi de « (déduit, à confirmer) ». Ce qui manque est écrit « à compléter ». Jamais l'adresse complète.
 4. Dans contact, mets le nom, le téléphone, l'e-mail et la ville seulement s'ils figurent dans un CV.
 Réponse : quelques lignes sur ce que tu as lu, les points déduits à confirmer et ce qui manque. Rappelle que le profil se relit et se corrige dans Réglages, partie Profil.`,
@@ -113,7 +115,9 @@ Réponse : combien d'e-mails tu as lus, combien de propositions attendent (ratta
 };
 
 export function buildPrompt(message: string, mode: RequestMode, history: ChatMessage[], settings: Settings, now: Date = new Date(), task?: AssistantTask): string {
-  const today = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });
+  // The computer's own time zone: Paris in France, Casablanca in Morocco.
+  const today = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const country = searchCountry(undefined, [], { text: settings.profile, city: settings.contact.city });
   const turns = history
     .slice(-12)
     .map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 1500)}`)
@@ -123,6 +127,7 @@ export function buildPrompt(message: string, mode: RequestMode, history: ChatMes
     MODES[mode],
     settings.autoDocuments ? "Préparation automatique du CV et de la lettre : activée." : "Préparation automatique du CV et de la lettre : désactivée (seulement sur demande).",
     ...settings.profile.split("\n").filter((l) => /^- (Orientations|Préférences|Recherche|Dates|Critère)/.test(l)),
+    `Pays de recherche déduit du profil : ${country === "ma" ? "Maroc" : "France"}.`,
     `${settings.scoring}`,
     turns ? `\nDerniers échanges :\n${turns}` : "",
     task ? `\n${TASKS[task]}` : `\nDemande de l'utilisateur :\n${message}`,

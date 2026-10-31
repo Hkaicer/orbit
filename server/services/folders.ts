@@ -36,7 +36,7 @@ export function inside(base: string, ...parts: string[]): string {
   return target;
 }
 
-const date = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Paris" }) : "");
+const date = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
 const list = (items: string[]) => (items.length ? items.map((i) => `- ${i}`).join("\n") : "- (rien)");
 
 function analysisMd(a: Analysis | null, imported: string | null): string | null {

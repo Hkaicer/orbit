@@ -38,7 +38,7 @@ import { renderPage } from "../services/renderPage";
 import { writeApplicationFolder, writeExtraFile } from "../services/folders";
 import { saveSettings, zContact, type Settings } from "../services/settings";
 import { BOARD_LABELS, type BoardId, type CompanySource } from "../search/collectors";
-import { cachedJob, companyFromUrl, fitAnalysis, runSearch } from "../search/search";
+import { cachedJob, companyFromUrl, fitAnalysis, FRANCE_ONLY, runSearch } from "../search/search";
 import type { AiVault } from "./vault";
 import { addEvent } from "../domain/history";
 import { mailsToReview, saveReviews, zReviewInput } from "../domain/mailReviews";
@@ -340,7 +340,9 @@ export const TOOLS = [
           on,
           ...(id === "france_travail" && !keys.franceTravail ? { missingKey: true } : {}),
           ...(id === "adzuna" && !keys.adzuna ? { missingKey: true } : {}),
+          ...(FRANCE_ONLY.includes(id) ? { franceOnly: true } : {}),
         })),
+        alertsOnly: "Rekrute et Emploi.ma (Maroc) : par leurs alertes e-mail seulement, leurs sites refusent la lecture automatique.",
         companies: (d.settings.searchCompanies as CompanySource[]).map((c) => ({ company: c.company, system: c.type, on: c.active })),
       };
     },
@@ -348,7 +350,7 @@ export const TOOLS = [
   tool({
     name: "search_jobs",
     description:
-      "Search job offers on every active source (LinkedIn read without an account and slowly, France Travail, Adzuna, Remotive, Arbeitnow, RemoteOK, followed companies' career sites) and rank them by fit with the profile and the CVs, never by place. Call it only after asking the user's preferences and getting the answers (preferencesConfirmed). Give short keywords (one or two words each) in French and English, the two most important first: LinkedIn only searches those two. locations is a filter only. Returns the best offers (limit, 50 at most), each with its score, reasons and site, and a searchId for add_search_results. Can take one to two minutes.",
+      "Search job offers on every active source (LinkedIn read without an account and slowly, France Travail, Adzuna, Remotive, Arbeitnow, RemoteOK, followed companies' career sites) and rank them by fit with the profile and the CVs, never by place. Set country from the profile: fr (France) or ma (Morocco, where the sites with offers in France only are skipped). Call it only after asking the user's preferences and getting the answers (preferencesConfirmed). Give short keywords (one or two words each) in French and English, the two most important first: LinkedIn only searches those two. locations is a filter only. Returns the best offers (limit, 50 at most), each with its score, reasons and site, and a searchId for add_search_results. Can take one to two minutes.",
     input: z.object({
       preferencesConfirmed: z.literal(true),
       keywords: z.array(z.string().trim().min(2).max(60)).min(1).max(16),
@@ -362,16 +364,18 @@ export const TOOLS = [
       exclude: z.array(z.string().trim().min(2).max(60)).max(40).default([]),
       limit: z.number().int().min(1).max(50).default(50),
       only: z.array(z.string().trim().max(80)).max(30).default([]),
+      country: z.enum(["fr", "ma"]).optional(),
     }),
     kind: "read",
     run: async (d, i) => {
       await d.vault?.ready();
       const out = await runSearch(
         { db: d.db, settings: d.settings, keys: d.vault?.read().search ?? {}, collect: { fetch: d.fetch, sleep: d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))) } },
-        { keywords: i.keywords, contracts: i.contracts, locations: i.locations, remote: i.remote, since: i.since ?? null, exclude: i.exclude, limit: i.limit, only: i.only },
+        { keywords: i.keywords, contracts: i.contracts, locations: i.locations, remote: i.remote, since: i.since ?? null, exclude: i.exclude, limit: i.limit, only: i.only, country: i.country },
       );
       return {
         searchId: out.searchId,
+        country: out.country,
         sources: out.sources,
         counts: out.counts,
         results: out.results.map((r) => ({

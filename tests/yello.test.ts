@@ -21,17 +21,24 @@ function fakeYello() {
       return new Response(
         `<div data-filter-search-url="${BOARD}/filter_fields/search/245">Country/Region</div><div data-filter-search-url="${BOARD}/filter_fields/search/970">City</div><div data-filter-search-url="https://evil.example/x"></div>`,
       );
-    if (url.startsWith(`${BOARD}/filter_fields/search/245`))
+    if (url.startsWith(`${BOARD}/filter_fields/search/245`)) {
+      const asked = new URL(url).searchParams.get("query");
+      if (asked === "Morocco") return json({ filter_answers: [{ id: 555, label: "Morocco" }], more_answers: false });
       return json({
-        filter_answers: [
-          { id: 29994, label: "France" },
-          { id: 1, label: "French Polynesia" },
-        ],
+        filter_answers:
+          asked === "France"
+            ? [
+                { id: 29994, label: "France" },
+                { id: 1, label: "French Polynesia" },
+              ]
+            : [],
         more_answers: false,
       });
+    }
     if (url.startsWith(`${BOARD}/filter_fields/search/970`)) return json({ filter_answers: [], more_answers: false });
     if (url.startsWith(`${BOARD}/search?`)) {
       const p = new URL(url).searchParams;
+      if (p.get("filters") === "555") return json({ html: card("ma1", "Consultant Cybersécurité - Casablanca"), more_requisitions: false });
       if (p.get("filters") !== "29994") return json({ html: card("world", "USA - Intern"), more_requisitions: false });
       if (p.get("page_number") === "1")
         return json({ html: card("a1", "Stage en Digital Forensics / eDiscovery - Paris") + card("a2", "Junior Cybersecurity Consultant &amp; GRC"), more_requisitions: true });
@@ -77,5 +84,9 @@ describe("Yello career sites", () => {
     const world = await collectCompany(src, { keywords: ["cyber"], location: "", since: null, internship: false, remoteOnly: false }, { fetch: fetchFn, sleep: async () => undefined });
     expect(world).toMatchObject([{ title: "USA - Intern", location: "" }]);
     expect(world[0]!.located).toBeUndefined();
+
+    // A search in Morocco, asked in French: the board names it in English.
+    const ma = await collectCompany(src, { keywords: ["cyber"], location: "Maroc", since: null, internship: false, remoteOnly: false }, { fetch: fetchFn, sleep: async () => undefined });
+    expect(ma).toMatchObject([{ title: "Consultant Cybersécurité - Casablanca", location: "Morocco", located: true }]);
   });
 });

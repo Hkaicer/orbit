@@ -1,4 +1,5 @@
-// Job-alert emails (LinkedIn, Indeed, HelloWork, Welcome to the Jungle, APEC)
+// Job-alert emails (LinkedIn, Indeed, HelloWork, Welcome to the Jungle, APEC, and in
+// Morocco Rekrute and Emploi.ma, whose sites cannot be read automatically)
 // read from Gmail: each listed job becomes an offer. Only the clean link of the
 // job is kept, never the tracking or login tokens the email links carry.
 
@@ -6,7 +7,7 @@ import { normalize } from "../domain/offers";
 import { mailText } from "./classify";
 import type { RawMail } from "./imap";
 
-export type AlertSource = "LinkedIn" | "Indeed" | "HelloWork" | "Welcome to the Jungle" | "APEC";
+export type AlertSource = "LinkedIn" | "Indeed" | "HelloWork" | "Welcome to the Jungle" | "APEC" | "Rekrute" | "Emploi.ma";
 
 export interface AlertJob {
   source: AlertSource;
@@ -24,9 +25,12 @@ const SENDERS: [RegExp, AlertSource][] = [
   [/@([a-z0-9-]+\.)?hellowork\.(com|fr)$/i, "HelloWork"],
   [/@([a-z0-9-]+\.)?welcometothejungle\.(com|co)$/i, "Welcome to the Jungle"],
   [/@([a-z0-9-]+\.)?apec\.fr$/i, "APEC"],
+  [/@([a-z0-9-]+\.)?rekrute\.com$/i, "Rekrute"],
+  [/@([a-z0-9-]+\.)?emploi\.ma$/i, "Emploi.ma"],
 ];
 
-export const ALERT_QUERY = "from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR jobalert.indeed.com OR alert@indeed.com OR hellowork OR welcometothejungle OR apec.fr)";
+export const ALERT_QUERY =
+  "from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR jobalert.indeed.com OR alert@indeed.com OR hellowork OR welcometothejungle OR apec.fr OR rekrute.com OR emploi.ma)";
 
 export const alertSource = (address: string | null | undefined): AlertSource | null => {
   if (!address) return null;
@@ -53,6 +57,8 @@ function canonical(source: AlertSource, raw: string): string | null {
   if (source === "HelloWork") return /\/emplois\/\d+\.html$/.test(u.pathname) ? `https://www.hellowork.com${u.pathname}` : null;
   if (source === "Welcome to the Jungle") return /\/jobs\/[^/]+$/.test(u.pathname) && host.includes("welcometothejungle") ? `https://www.welcometothejungle.com${u.pathname}` : null;
   if (source === "APEC") return /detail-offre\/[0-9A-Z]+/i.test(u.pathname) ? `https://www.apec.fr${u.pathname}` : null;
+  if (source === "Rekrute") return host.endsWith("rekrute.com") && /^\/(fr\/)?offre-emploi-[a-z0-9-]+-\d+\.html$/i.test(u.pathname) ? `https://www.rekrute.com${u.pathname}` : null;
+  if (source === "Emploi.ma") return host.endsWith("emploi.ma") && /^\/offre-emploi-maroc\/[a-z0-9-]+-\d+\/?$/i.test(u.pathname) ? `https://www.emploi.ma${u.pathname.replace(/\/$/, "")}` : null;
   return null;
 }
 
